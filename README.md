@@ -37,6 +37,10 @@ class MyWidget(Widget):
         return f"[{bar.current}/{bar.total}]"
 ```
 
+### 🔹 **Demo**
+
+![Super Bario Demo](https://github.com/iserpent/super-bario-media/blob/main/Super_Bario_Demo.gif)
+
 ### 🔹 **Themes**
 Themes define:
 - character sets  

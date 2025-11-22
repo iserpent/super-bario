@@ -39,7 +39,7 @@ class MyWidget(Widget):
 
 ### 🔹 **Demo**
 
-![Super Bario Demo](https://github.com/iserpent/super-bario-media/blob/main/Super_Bario_Demo.gif)
+![Super Bario Demo](https://github.com/iserpent/super-bario-media/raw/main/Super_Bario_Demo.gif)
 
 ### 🔹 **Themes**
 Themes define:

@@ -1343,7 +1343,7 @@ class _Group:
             if self._closed:
                 return
 
-            self._refresh_internal()
+            self._refresh_internal(final=True)
 
             if self._proxy_stdout and self._original_stdout:
                 if isinstance(sys.stdout, self.StdProxy):
@@ -1353,6 +1353,7 @@ class _Group:
                 if isinstance(sys.stderr, self.StdProxy):
                     sys.stderr._flush_internal()
                 sys.stderr = self._original_stderr
+
             self._closed = True
             _Group._initialized = False
             _Group._instance = None
@@ -1657,7 +1658,7 @@ class _Group:
 
             self._refresh_internal(force_clear=force_clear)
 
-    def _refresh_internal(self, force_clear: bool = False):
+    def _refresh_internal(self, force_clear: bool = False, final: bool = False):
         if not self._is_in_tty or self._quiet:
             return
 
@@ -1672,7 +1673,7 @@ class _Group:
             # Clear previous lines
             self._clear_internal(force=force_clear)
 
-            self._display_internal(lines=lines)
+            self._display_internal(lines=lines, final=final)
         except Exception:
             logger.exception('Display progress failed')
         finally:
@@ -1690,7 +1691,7 @@ class _Group:
 
         return lines
 
-    def _display_internal(self, lines: Optional[List[str]] = None):
+    def _display_internal(self, lines: Optional[List[str]] = None, final: bool = False):
         """Display the progress bars"""
         if not self._is_in_tty or self._quiet:
             return
@@ -1710,7 +1711,9 @@ class _Group:
         if not lines:
             return
 
-        self._original_stderr.write('\r' + '\n'.join(lines))
+        output = '\r' + '\n'.join(lines) + ('\n' if final else '')
+
+        self._original_stderr.write(output)
         self._original_stderr.flush()
         self._last_lines_drawn_count = len(lines)
 

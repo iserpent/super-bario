@@ -11,7 +11,7 @@ from super_bario import (
 
 
 def example_1():
-    print("\n=== Example 1: Default Theme ===")
+    print("=== Example 1: Default Theme ===")
 
     for i in progress(range(1, 100 + 1), title="Processing items"):
         time.sleep(0.02)
@@ -21,7 +21,7 @@ def example_1():
 
 
 def example_2():
-    print("\n=== Example 2: Watch Qeueus ===")
+    print("=== Example 2: Watch Qeueus ===")
     from queue import Queue
 
     q1 = Queue(maxsize=1000)
@@ -63,7 +63,7 @@ def example_2():
 
 
 def example_3():
-    print("\n=== Example 3: Minimal Theme ===")
+    print("=== Example 3: Minimal Theme ===")
 
     with Group:  # another way to manage Group lifecycle
         for i in progress(range(1, 100 + 1), title="Processing items", theme=Theme.minimal()):
@@ -71,7 +71,7 @@ def example_3():
 
 
 def example_4():
-    print("\n=== Example 4: Text only ===")
+    print("=== Example 4: Text only ===")
 
     with Group:
         for i in progress(range(1, 100 + 1), title="Processing items", use_unicode=False):
@@ -79,7 +79,7 @@ def example_4():
 
 
 def example_5():
-    print("\n=== Example 5: Matrix Theme ===")
+    print("=== Example 5: Matrix Theme ===")
 
     with Group:
         for i in progress(range(1, 100 + 1), title="Processing items", theme=Theme.matrix()):
@@ -87,7 +87,7 @@ def example_5():
 
 
 def example_6():
-    print("\n=== Example 6: Fire Gradient ===")
+    print("=== Example 6: Fire Gradient ===")
 
     bar = Bar(total=100, title="Heating up")
     view = View(bar, theme=Theme.fire())
@@ -102,7 +102,7 @@ def example_6():
 
 
 def example_7():
-    print("\n=== Example 7: Load Gradient ===")
+    print("=== Example 7: Load Gradient ===")
 
     bar = Bar(total=100, title="Load")
     view = View(bar, theme=Theme.load())
@@ -117,7 +117,7 @@ def example_7():
 
 
 def example_8():
-    print("\n=== Example 8: Custom theme ===")
+    print("=== Example 8: Custom theme ===")
 
     # Custom gradient theme
     custom_gradient = Theme(
@@ -142,7 +142,7 @@ def example_8():
 
 
 def example_9():
-    print("\n=== Example 9: Custom Widgets with Rate ===")
+    print("=== Example 9: Custom Widgets with Rate ===")
 
     widgets = [
         TitleWidget("Download", theme=Theme.default()),
@@ -165,7 +165,7 @@ def example_9():
 
 
 def example_10():
-    print("\n=== Example 10: Progress tree ===")
+    print("=== Example 10: Progress tree ===")
 
     for i in progress(range(1, 2 + 1), title=lambda item: f"Processing i: {item.value}"):
         for j in progress(range(1, 20 + 1), title=lambda item: f"Processing j: {item.value}", indent=1, remove_on_complete=True):
@@ -176,7 +176,7 @@ def example_10():
 
 
 def example_11():
-    print("\n=== Example 11: Spinner Styles ===")
+    print("=== Example 11: Spinner Styles ===")
 
     with Group:
         for spinner_style, use_unicode in [('snake', True), ('dots', True), ('arrows', True), ('bouncing', True), ('spinner', False)]:
@@ -196,7 +196,7 @@ def example_11():
 
 
 def example_12():
-    print("\n=== Example 12: Different Themes in nested repeated layouts with Threads ===")
+    print("=== Example 12: Different Themes in nested repeated layouts with Threads ===")
 
     import threading
 

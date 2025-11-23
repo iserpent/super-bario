@@ -39,6 +39,9 @@ class MyWidget(Widget):
 
 ### 🔹 **Demo**
 
+This animation was produced by running the code in  
+[`examples/examples.py`](https://github.com/iserpent/super-bario/blob/main/examples/examples.py)
+
 ![Super Bario Demo](https://github.com/iserpent/super-bario-media/raw/main/Super_Bario_Demo.gif)
 
 ### 🔹 **Themes**
@@ -266,7 +269,7 @@ Contributions, PRs, and ideas are very welcome.
 # 📄 License
 
 MIT License  
-Copyright © 2025
+Copyright © 2025 Igor Iatsenko
 
 ---
 

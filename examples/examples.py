@@ -10,6 +10,90 @@ from super_bario import (
 )
 
 
+def example_0():
+    print("=== Example 0: Different Themes in nested repeated layouts with Threads ===")
+
+    import threading
+
+    def worker(theme, layouts, indent, remove_on_complete=False):
+        for i in progress(range(1, 80 + 1), title=lambda item: f"Task {layouts} - Item {item.value}", theme=theme, layouts=layouts, indent=indent, remove_on_complete=remove_on_complete):
+            time.sleep(0.1)
+
+    def sub_worker(layouts):
+        for i in progress(range(1, 2 + 1), title=lambda item: f"Processing i: {item.value}", layouts=layouts):
+            for j in progress(range(1, 10 + 1), title=lambda item: f"Processing j: {item.value}", indent=1, layouts=layouts, remove_on_complete=True):
+                for k in progress(range(1, 30 + 1), title=lambda item: f"Processing k: {item.value}", indent=2, layouts=layouts, remove_on_complete=True):
+                    time.sleep(0.01)
+
+    def stdout_worker():
+        for i in range(1, 10 + 1):
+            time.sleep(random.uniform(0.2, 0.5))
+            print(f"Demo of the multi-threaded stdout handling: Step {i}")
+
+    def stderr_worker():
+        for i in range(1, 10 + 1):
+            time.sleep(random.uniform(0.4, 0.5))
+            print(f"Demo of the multi-threaded stderr handling: Step {i}", file=sys.stderr)
+
+    Group.create_row_layout("h_layout1")
+    Group.create_row_layout("h_layout2")
+    Group.create_row_layout("h_layout3")
+    Group.create_row_layout("h_layout4")
+
+    Group.create_column_layout("v_layout1_1", parents=["h_layout1"])
+    Group.create_column_layout("v_layout2_1", parents=["h_layout1"])
+    Group.create_column_layout("v_layout3_1", parents=["h_layout1"])
+
+    Group.create_column_layout("v_layout1_2", parents=["h_layout2"])
+    Group.create_column_layout("v_layout2_2", parents=["h_layout2"])
+    Group.create_column_layout("v_layout3_2", parents=["h_layout2"])
+
+    Group.create_column_layout("v_layout1_3", parents=["h_layout3"])
+    Group.create_column_layout("v_layout2_3", parents=["h_layout3"])
+
+    Group.create_column_layout("v_layout1_4", parents=["h_layout4"])
+    Group.create_column_layout("v_layout2_4", parents=["h_layout4"])
+
+
+    Group.add_layout("h_layout2", parents=["v_layout1_4"])
+    Group.add_layout("h_layout3", parents=["v_layout2_4"])
+
+    threads = []
+    themes = [
+        (Theme.default(), ["v_layout1_1"], 0, False),
+        (Theme.matrix(), ["v_layout2_1"], 1, True),
+        (Theme.fire(), ["v_layout3_1"], 2, True)
+    ]
+
+    for args in themes:
+        t = threading.Thread(target=worker, args=args)
+        threads.append(t)
+
+    themes = [
+        (Theme.default(), ["v_layout1_3"], 0, False),
+        (Theme.minimal(), ["v_layout1_3"], 1, False),
+        (Theme.matrix(), ["v_layout1_3"], 2, True),
+        (Theme.fire(), ["v_layout1_3"], 3, True),
+        (Theme.load(), ["v_layout1_3"], 4, True)
+    ]
+    for args in themes:
+        t = threading.Thread(target=worker, args=args)
+        threads.append(t)
+
+    threads.append(threading.Thread(target=sub_worker, args=(["v_layout1_2", "v_layout2_2", "v_layout3_2"],)))
+    threads.append(threading.Thread(target=sub_worker, args=(["v_layout2_3"],)))
+    threads.append(threading.Thread(target=stdout_worker))
+    threads.append(threading.Thread(target=stderr_worker))
+
+    for t in threads:
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    Group.close()
+
+
 def example_1():
     print("=== Example 1: Default Theme ===")
 
@@ -195,96 +279,12 @@ def example_11():
                 time.sleep(0.05)
 
 
-def example_12():
-    print("=== Example 12: Different Themes in nested repeated layouts with Threads ===")
-
-    import threading
-
-    def worker(theme, layouts, indent, remove_on_complete=False):
-        for i in progress(range(1, 200 + 1), title=lambda item: f"Task {layouts} - Item {item.value}", theme=theme, layouts=layouts, indent=indent, remove_on_complete=remove_on_complete):
-            time.sleep(0.1)
-
-    def sub_worker(layouts):
-        for i in progress(range(1, 2 + 1), title=lambda item: f"Processing i: {item.value}", layouts=layouts):
-            for j in progress(range(1, 10 + 1), title=lambda item: f"Processing j: {item.value}", indent=1, layouts=layouts, remove_on_complete=True):
-                for k in progress(range(1, 30 + 1), title=lambda item: f"Processing k: {item.value}", indent=2, layouts=layouts, remove_on_complete=True):
-                    time.sleep(0.01)
-
-    def stdout_worker():
-        for i in range(1, 10 + 1):
-            time.sleep(random.uniform(0.2, 0.5))
-            print(f"Demo of the multi-threaded stdout handling: Step {i}")
-
-    def stderr_worker():
-        for i in range(1, 10 + 1):
-            time.sleep(random.uniform(0.4, 0.5))
-            print(f"Demo of the multi-threaded stderr handling: Step {i}", file=sys.stderr)
-
-    Group.create_row_layout("h_layout1")
-    Group.create_row_layout("h_layout2")
-    Group.create_row_layout("h_layout3")
-    Group.create_row_layout("h_layout4")
-
-    Group.create_column_layout("v_layout1_1", parents=["h_layout1"])
-    Group.create_column_layout("v_layout2_1", parents=["h_layout1"])
-    Group.create_column_layout("v_layout3_1", parents=["h_layout1"])
-
-    Group.create_column_layout("v_layout1_2", parents=["h_layout2"])
-    Group.create_column_layout("v_layout2_2", parents=["h_layout2"])
-    Group.create_column_layout("v_layout3_2", parents=["h_layout2"])
-
-    Group.create_column_layout("v_layout1_3", parents=["h_layout3"])
-    Group.create_column_layout("v_layout2_3", parents=["h_layout3"])
-
-    Group.create_column_layout("v_layout1_4", parents=["h_layout4"])
-    Group.create_column_layout("v_layout2_4", parents=["h_layout4"])
-
-
-    Group.add_layout("h_layout2", parents=["v_layout1_4"])
-    Group.add_layout("h_layout3", parents=["v_layout2_4"])
-
-    threads = []
-    themes = [
-        (Theme.default(), ["v_layout1_1"], 0, False),
-        (Theme.matrix(), ["v_layout2_1"], 1, True),
-        (Theme.fire(), ["v_layout3_1"], 2, True)
-    ]
-
-    for args in themes:
-        t = threading.Thread(target=worker, args=args)
-        threads.append(t)
-
-    themes = [
-        (Theme.default(), ["v_layout1_3"], 0, False),
-        (Theme.minimal(), ["v_layout1_3"], 1, False),
-        (Theme.matrix(), ["v_layout1_3"], 2, True),
-        (Theme.fire(), ["v_layout1_3"], 3, True),
-        (Theme.load(), ["v_layout1_3"], 4, True)
-    ]
-    for args in themes:
-        t = threading.Thread(target=worker, args=args)
-        threads.append(t)
-
-    threads.append(threading.Thread(target=sub_worker, args=(["v_layout1_2", "v_layout2_2", "v_layout3_2"],)))
-    threads.append(threading.Thread(target=sub_worker, args=(["v_layout2_3"],)))
-    threads.append(threading.Thread(target=stdout_worker))
-    threads.append(threading.Thread(target=stderr_worker))
-
-    for t in threads:
-        t.start()
-
-    for t in threads:
-        t.join()
-
-    Group.close()
-
-
 if __name__ == '__main__':
     import logging
 
     logging.basicConfig(level=logging.DEBUG)
 
-    for i in range(1, 12 + 1):
-        if i != 1:
+    for i in range(0, 11 + 1):
+        if i != 0:
             time.sleep(1)
         globals()[f"example_{i}"]()

@@ -4,7 +4,7 @@ import time
 import random
 
 from super_bario import (
-    progress, Bar, Group, View, Theme,
+    progress, Progress, Bar, View, Theme,
     TitleWidget, BarWidget, PercentageWidget, TimeWidget, CounterWidget, SpinnerWidget, RateWidget,
     Colors
 )
@@ -35,28 +35,28 @@ def example_0():
             time.sleep(random.uniform(0.4, 0.5))
             print(f"Demo of the multi-threaded stderr handling: Step {i}", file=sys.stderr)
 
-    Group.create_row_layout("h_layout1")
-    Group.create_row_layout("h_layout2")
-    Group.create_row_layout("h_layout3")
-    Group.create_row_layout("h_layout4")
+    Progress.create_row_layout("h_layout1")
+    Progress.create_row_layout("h_layout2")
+    Progress.create_row_layout("h_layout3")
+    Progress.create_row_layout("h_layout4")
 
-    Group.create_column_layout("v_layout1_1", parents=["h_layout1"])
-    Group.create_column_layout("v_layout2_1", parents=["h_layout1"])
-    Group.create_column_layout("v_layout3_1", parents=["h_layout1"])
+    Progress.create_column_layout("v_layout1_1", parents=["h_layout1"])
+    Progress.create_column_layout("v_layout2_1", parents=["h_layout1"])
+    Progress.create_column_layout("v_layout3_1", parents=["h_layout1"])
 
-    Group.create_column_layout("v_layout1_2", parents=["h_layout2"])
-    Group.create_column_layout("v_layout2_2", parents=["h_layout2"])
-    Group.create_column_layout("v_layout3_2", parents=["h_layout2"])
+    Progress.create_column_layout("v_layout1_2", parents=["h_layout2"])
+    Progress.create_column_layout("v_layout2_2", parents=["h_layout2"])
+    Progress.create_column_layout("v_layout3_2", parents=["h_layout2"])
 
-    Group.create_column_layout("v_layout1_3", parents=["h_layout3"])
-    Group.create_column_layout("v_layout2_3", parents=["h_layout3"])
+    Progress.create_column_layout("v_layout1_3", parents=["h_layout3"])
+    Progress.create_column_layout("v_layout2_3", parents=["h_layout3"])
 
-    Group.create_column_layout("v_layout1_4", parents=["h_layout4"])
-    Group.create_column_layout("v_layout2_4", parents=["h_layout4"])
+    Progress.create_column_layout("v_layout1_4", parents=["h_layout4"])
+    Progress.create_column_layout("v_layout2_4", parents=["h_layout4"])
 
 
-    Group.add_layout("h_layout2", parents=["v_layout1_4"])
-    Group.add_layout("h_layout3", parents=["v_layout2_4"])
+    Progress.add_layout("h_layout2", parents=["v_layout1_4"])
+    Progress.add_layout("h_layout3", parents=["v_layout2_4"])
 
     threads = []
     themes = [
@@ -91,7 +91,7 @@ def example_0():
     for t in threads:
         t.join()
 
-    Group.close()
+    Progress.close()
 
 
 def example_1():
@@ -100,8 +100,8 @@ def example_1():
     for i in progress(range(1, 100 + 1), title="Processing items"):
         time.sleep(0.02)
 
-    # We need to close the Group only if we need to create a new one later, like in this script
-    Group.close()
+    # We need to close the Progress only if we need to create a new one later, like in this script
+    Progress.close()
 
 
 def example_2():
@@ -117,13 +117,13 @@ def example_2():
     for i in range(1, 301 + 1):
         q2.put_nowait(i)
 
-    Group.create_row_layout("h_layout1")
+    Progress.create_row_layout("h_layout1")
 
-    Group.create_column_layout("v_layout1", parents=["h_layout1"])
-    Group.create_column_layout("v_layout2", parents=["h_layout1"])
+    Progress.create_column_layout("v_layout1", parents=["h_layout1"])
+    Progress.create_column_layout("v_layout2", parents=["h_layout1"])
 
-    Group.add_watch(q1, "Queue 1", layouts=["v_layout1"])
-    Group.add_watch(q2, "Queue 2", layouts=["v_layout2"])
+    Progress.add_watch(q1, "Queue 1", layouts=["v_layout1"])
+    Progress.add_watch(q2, "Queue 2", layouts=["v_layout2"])
 
     for i in range(1, 200 + 1):
         q1_action = random.choice([q1.get_nowait, q1.put_nowait])
@@ -143,13 +143,13 @@ def example_2():
 
         time.sleep(0.02)
 
-    Group.close()
+    Progress.close()
 
 
 def example_3():
     print("=== Example 3: Minimal Theme ===")
 
-    with Group:  # another way to manage Group lifecycle
+    with Progress:  # another way to manage Progress lifecycle
         for i in progress(range(1, 100 + 1), title="Processing items", theme=Theme.minimal()):
             time.sleep(0.02)
 
@@ -157,7 +157,7 @@ def example_3():
 def example_4():
     print("=== Example 4: Text only ===")
 
-    with Group:
+    with Progress:
         for i in progress(range(1, 100 + 1), title="Processing items", use_unicode=False):
             time.sleep(0.02)
 
@@ -165,7 +165,7 @@ def example_4():
 def example_5():
     print("=== Example 5: Matrix Theme ===")
 
-    with Group:
+    with Progress:
         for i in progress(range(1, 100 + 1), title="Processing items", theme=Theme.matrix()):
             time.sleep(0.02)
 
@@ -175,14 +175,14 @@ def example_6():
 
     bar = Bar(total=100, title="Heating up")
     view = View(bar, theme=Theme.fire())
-    Group.add_bar(bar, view)
+    Progress.add_bar(bar, view)
 
     for i in range(1, 100 + 1):
         bar.increment()
-        Group.display()
+        Progress.display()
         time.sleep(0.02)
 
-    Group.close()
+    Progress.close()
 
 
 def example_7():
@@ -190,14 +190,14 @@ def example_7():
 
     bar = Bar(total=100, title="Load")
     view = View(bar, theme=Theme.load())
-    Group.add_bar(bar, view)
+    Progress.add_bar(bar, view)
 
     for i in range(1, 100 + 1):
         bar.increment()
-        Group.display()
+        Progress.display()
         time.sleep(0.02)
 
-    Group.close()
+    Progress.close()
 
 
 def example_8():
@@ -215,14 +215,14 @@ def example_8():
 
     bar = Bar(total=100, title="Rainbow Progress")
     view = View(bar, theme=custom_gradient)
-    Group.add_bar(bar, view)
+    Progress.add_bar(bar, view)
 
     for i in range(1, 100 + 1):
         bar.increment()
-        Group.display()
+        Progress.display()
         time.sleep(0.02)
 
-    Group.close()
+    Progress.close()
 
 
 def example_9():
@@ -238,14 +238,14 @@ def example_9():
 
     bar = Bar(total=200)
     view = View(bar, widgets=widgets)
-    Group.add_bar(bar, view)
+    Progress.add_bar(bar, view)
 
     for i in range(1, 200 + 1):
         bar.increment()
-        Group.display()
+        Progress.display()
         time.sleep(0.01)
 
-    Group.close()
+    Progress.close()
 
 
 def example_10():
@@ -256,13 +256,13 @@ def example_10():
             for k in progress(range(1, 50 + 1), title=lambda item: f"Processing k: {item.value}", indent=2, remove_on_complete=True):
                 time.sleep(0.001)
 
-    Group.instance().close()
+    Progress.instance().close()
 
 
 def example_11():
     print("=== Example 11: Spinner Styles ===")
 
-    with Group:
+    with Progress:
         for spinner_style, use_unicode in [('snake', True), ('dots', True), ('arrows', True), ('bouncing', True), ('spinner', False)]:
             widgets = [
                 TitleWidget(f"Loading ({spinner_style})", theme=Theme.default()),
@@ -271,11 +271,11 @@ def example_11():
                 TimeWidget(show_eta=False, theme=Theme.default())
             ]
 
-            bar = Group.create_bar(total=0, widgets=widgets)
+            bar = Progress.create_bar(total=0, widgets=widgets)
 
             for i in range(1, 30 + 1):
                 bar.increment()
-                Group.display()
+                Progress.display()
                 time.sleep(0.05)
 
 

@@ -1,4 +1,4 @@
-from super_bario import progress, Group, Theme
+from super_bario import progress, Progress, Theme
 
 def test_progress_wrapper_yields_items():
     items = list(range(5))
@@ -6,10 +6,10 @@ def test_progress_wrapper_yields_items():
     for item in progress(items, title="Test", theme=Theme.minimal()):
         seen.append(item)
     assert seen == items
-    Group.close()
+    Progress.close()
 
 def test_group_smoke():
-    group = Group.instance()
+    group = Progress.instance()
     bar = group.create_bar(total=3, title="Smoke")
     for _ in range(3):
         bar.increment()

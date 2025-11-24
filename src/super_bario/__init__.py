@@ -40,11 +40,13 @@ from enum import Enum
 import logging
 
 __all__ = [
+    'progress',
+    'Progress',
+    'ProgressContext',
     'Bar',
     'BarItem',
-    'Group',
-    'progress',
-    'ProgressContext',
+    'Theme',
+    'Colors',
     'Widget',
     'TitleWidget',
     'BarWidget',
@@ -53,8 +55,6 @@ __all__ = [
     'SpinnerWidget',
     'RateWidget',
     'TimeWidget',
-    'Theme',
-    'Colors',
 ]
 
 logger = logging.getLogger('super-bario')
@@ -618,7 +618,7 @@ class Bar:
     def __init__(self,
                  total: int = 0,
                  title: Union[str, Callable[[Any], str], None] = None,
-                 group_ref: Optional[ReferenceType['_Group']] = None,
+                 controller: Optional['_ProgressController'] = None,
                  remove_on_complete: bool = False,
                  indent: int = 0,
                  on_update: Optional[Callable[[int, float], None]] = None,
@@ -629,7 +629,7 @@ class Bar:
         Args:
             total: Total number of items (0 for indeterminate)
             title: Title string or callable returning title
-            group_ref: Weak reference to parent progress group
+            progress: Weak reference to parent progress group
             remove_on_complete: Remove bar when complete
             indent: Indentation level for nested bars
             on_update: Callback on progress update (current, progress)
@@ -643,7 +643,7 @@ class Bar:
 
         self.total = total
         self.title = title
-        self.group_ref = group_ref
+        self.set_controller(controller)
         self.remove_on_complete = remove_on_complete
         self.indent = indent
         self.on_update = on_update
@@ -669,15 +669,15 @@ class Bar:
             self.update(self.total)
         return False
 
-    def set_group(self, group: Optional['_Group']):
+    def set_controller(self, controller: Optional['_ProgressController']):
         """Set the parent progress group"""
-        self.group_ref = weakref.ref(group) if group else None
+        self.controller_ref = weakref.ref(controller) if controller else None
 
     @contextmanager
     def lock(self):
         """Context manager for thread-safe operations"""
-        if self.group_ref is not None:
-            group = self.group_ref()
+        if self.controller_ref is not None:
+            group = self.controller_ref()
             if group is not None:
                 with group.lock() as lock:
                     yield lock
@@ -1021,10 +1021,10 @@ class View:
 
 
 # ============================================================================
-# Progress _Group - Managing multiple progress bars
+# Progress _ProgressController - Managing multiple progress bars
 # ============================================================================
 
-class _Group:
+class _ProgressController:
     """Manages multiple progress bars with different layout modes"""
     _instance = None
     _lock = threading.Lock()
@@ -1039,11 +1039,11 @@ class _Group:
             ROW = 'row'
             COLUMN = 'column'
 
-        def __init__(self, name: str, type: Type = Type.COLUMN, components: Optional[List[Union[View, '_Group.Layout']]] = None):
+        def __init__(self, name: str, type: Type = Type.COLUMN, components: Optional[List[Union[View, '_ProgressController.Layout']]] = None):
             self.name: str = name
             self.parents: Set[str] = set()
-            self.type: '_Group.Layout.Type' = type
-            self._components: List[Union[View, '_Group.Layout']] = components or []
+            self.type: '_ProgressController.Layout.Type' = type
+            self._components: List[Union[View, '_ProgressController.Layout']] = components or []
 
         def __getitem__(self, index):
             return self._components[index]
@@ -1060,7 +1060,7 @@ class _Group:
         def insert(self, index, value):
             self._components.insert(index, value)
 
-        def add(self, component: Union[View, '_Group.Layout']):
+        def add(self, component: Union[View, '_ProgressController.Layout']):
             self._components.append(component)
 
         def add_parent(self, parent: str):
@@ -1085,7 +1085,7 @@ class _Group:
         def render(self, available_width) -> List[str]:
             """Render all progress bars"""
             lines = []
-            if self.type == _Group.Layout.Type.COLUMN:
+            if self.type == _ProgressController.Layout.Type.COLUMN:
                 for component in self:
                     rendered_lines = component.render(available_width)
                     lines.extend(rendered_lines)
@@ -1131,7 +1131,7 @@ class _Group:
         if cls._instance is None:
             with cls.lock():
                 if cls._instance is None:
-                    cls._instance = super(_Group, cls).__new__(cls)
+                    cls._instance = super(_ProgressController, cls).__new__(cls)
         return cls._instance
 
     def __init__(self,
@@ -1150,11 +1150,11 @@ class _Group:
             proxy_stdout: Redirect stdout to progress group
             proxy_stderr: Redirect stderr to progress group
         """
-        if _Group._initialized:
+        if _ProgressController._initialized:
             return
 
-        with _Group._lock:
-            if _Group._initialized:
+        with _ProgressController._lock:
+            if _ProgressController._initialized:
                 return
 
             self._quiet = False
@@ -1185,10 +1185,10 @@ class _Group:
             self._watched_collections: WeakKeyDictionary[Bar, ReferenceType] = WeakKeyDictionary()
 
             self.layouts = {
-                _DEFAULT_LAYOUT_NAME: self.Layout(_DEFAULT_LAYOUT_NAME, type=_Group.Layout.Type.COLUMN)
+                _DEFAULT_LAYOUT_NAME: self.Layout(_DEFAULT_LAYOUT_NAME, type=_ProgressController.Layout.Type.COLUMN)
             }
 
-            self._registered_layouts: Dict[str, _Group.Layout] = {
+            self._registered_layouts: Dict[str, _ProgressController.Layout] = {
                 _DEFAULT_LAYOUT_NAME: self.layouts[_DEFAULT_LAYOUT_NAME]
             }
 
@@ -1202,16 +1202,16 @@ class _Group:
             if self._proxy_stderr:
                 sys.stderr = self.StdProxy(self, self._original_stderr)
 
-            if not _Group._terminal_width_watcher_thread:
-                _Group._terminal_width_watcher_thread = threading.Thread(target=_terminal_width_watcher, daemon=True)
-                _Group._terminal_width_watcher_thread.start()
+            if not _ProgressController._terminal_width_watcher_thread:
+                _ProgressController._terminal_width_watcher_thread = threading.Thread(target=_terminal_width_watcher, daemon=True)
+                _ProgressController._terminal_width_watcher_thread.start()
 
-            if not _Group._collection_watcher_thread:
-                _Group._collection_watcher_thread = threading.Thread(target=_collection_watcher, daemon=True)
-                _Group._collection_watcher_thread.start()
+            if not _ProgressController._collection_watcher_thread:
+                _ProgressController._collection_watcher_thread = threading.Thread(target=_collection_watcher, daemon=True)
+                _ProgressController._collection_watcher_thread.start()
 
             self._closed = False
-            _Group._initialized = True
+            _ProgressController._initialized = True
 
     # Property setters for configuration
     @property
@@ -1254,14 +1254,14 @@ class _Group:
             self._watch_interval = value
 
     @classmethod
-    def instance(cls) -> '_Group':
-        """Get the singleton instance of _Group"""
+    def instance(cls) -> '_ProgressController':
+        """Get the singleton instance of _ProgressController"""
         return cls._instance or cls()
 
     class StdProxy:
         """Proxy to redirect stdout/stderr to progress group"""
 
-        def __init__(self, group: '_Group', stream: TextIO):
+        def __init__(self, group: '_ProgressController', stream: TextIO):
             self.group = group
             self.stream = stream
             self.buffer = []
@@ -1331,8 +1331,8 @@ class _Group:
     @contextmanager
     def lock(cls):
         """Context manager for thread-safe operations"""
-        with _Group._lock:
-            yield _Group._lock
+        with _ProgressController._lock:
+            yield _ProgressController._lock
 
     def close(self):
         """Manually restore original stdout/stderr"""
@@ -1355,8 +1355,8 @@ class _Group:
                 sys.stderr = self._original_stderr
 
             self._closed = True
-            _Group._initialized = False
-            _Group._instance = None
+            _ProgressController._initialized = False
+            _ProgressController._instance = None
 
     def add_bar(self, bar: Bar, view: View, layouts: Optional[List[str]] = None):
         """Add a progress bar to the group"""
@@ -1367,7 +1367,7 @@ class _Group:
             self._add_bar_internal(bar, view, layouts)
 
     def _add_bar_internal(self, bar: Bar, view: View, layouts: List[str]):
-        bar.set_group(self)
+        bar.set_controller(self)
 
         self._active_bars.add(bar)
 
@@ -1397,7 +1397,7 @@ class _Group:
                    min_update_interval: float = 0.1,
                    **kwargs) -> Bar:
         """Create and add a new progress bar"""
-        bar = Bar(*args, **kwargs, group_ref=weakref.ref(self))
+        bar = Bar(*args, **kwargs, controller=self)
 
         if view is not None:
             view.set_progress_bar(bar)
@@ -1464,7 +1464,7 @@ class _Group:
                 self._active_bars.discard(bar)
                 self._bar_usage.pop(bar, None)
                 self._view_usage.pop(bar, None)
-                bar.set_group(None)
+                bar.set_controller(None)
 
     def add_watch(self,
                   collection: Union[Queue, Sized],
@@ -1551,24 +1551,24 @@ class _Group:
             self._registered_layouts[parent].append(_layout)
             self._layout_usage[name] += 1
 
-    def _get_layout_descendants(self, layout: '_Group.Layout') -> Set['_Group.Layout']:
+    def _get_layout_descendants(self, layout: '_ProgressController.Layout') -> Set['_ProgressController.Layout']:
         """Recursively get all descendant layouts"""
         descendants = set()
         descendants.add(layout.name)
 
         for component in layout:
-            if isinstance(component, _Group.Layout):
+            if isinstance(component, _ProgressController.Layout):
                 descendants.update(self._get_layout_descendants(component))
 
         return descendants
 
     def create_row_layout(self, name: str, parents: Optional[List[str]] = None):
         """Create a layout that arranges bars side by side"""
-        self.create_layout(name, type=_Group.Layout.Type.ROW, parents=parents)
+        self.create_layout(name, type=_ProgressController.Layout.Type.ROW, parents=parents)
 
     def create_column_layout(self, name: str, parents: Optional[List[str]] = None):
         """Create a layout that arranges bars stacked vertically"""
-        self.create_layout(name, type=_Group.Layout.Type.COLUMN, parents=parents)
+        self.create_layout(name, type=_ProgressController.Layout.Type.COLUMN, parents=parents)
 
     def remove_layout(self, name: str, parents: Optional[List[str]] = None):
         """Remove a layout configuration"""
@@ -1607,7 +1607,7 @@ class _Group:
                 del self._layout_usage[name]
                 del self._registered_layouts[name]
 
-    def _clear_layout_internal(self, layout: '_Group.Layout'):
+    def _clear_layout_internal(self, layout: '_ProgressController.Layout'):
         """Recursively clear all bars from a layout"""
         for component in layout:
             if isinstance(component, View):
@@ -1754,9 +1754,9 @@ class _Group:
         self._original_stderr.flush()
 
 
-class GroupAPI(Protocol):
+class ProgressAPI(Protocol):
     """Protocol for Group class methods"""
-    def __enter__(self) -> '_Group':
+    def __enter__(self) -> '_ProgressController':
         ...
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -1767,7 +1767,7 @@ class GroupAPI(Protocol):
         ...
 
     @classmethod
-    def instance(cls) -> '_Group':
+    def instance(cls) -> '_ProgressController':
         ...
 
     def close(self) -> None:
@@ -1788,10 +1788,10 @@ class GroupAPI(Protocol):
     def remove_watch(self, bar: Bar) -> None:
         ...
 
-    def get_layout(self, name: str) -> _Group.Layout:
+    def get_layout(self, name: str) -> _ProgressController.Layout:
         ...
 
-    def create_layout(self, name: str, type: _Group.Layout.Type = ..., parents: Optional[List[str]] = None) -> None:
+    def create_layout(self, name: str, type: _ProgressController.Layout.Type = ..., parents: Optional[List[str]] = None) -> None:
         ...
 
     def create_row_layout(self, name: str, parents: Optional[List[str]] = None) -> None:
@@ -1822,42 +1822,42 @@ class GroupAPI(Protocol):
         ...
 
 
-class _GroupMeta(type):
-    """Metaclass to delegate class methods to _Group singleton"""
+class _ProgressMeta(type):
+    """Metaclass to delegate class methods to _ProgressController singleton"""
 
     def __enter__(self):
-        return _Group.instance().__enter__()
+        return _ProgressController.instance().__enter__()
 
     def __exit__(self, *args):
-        return _Group.instance().__exit__(*args)
+        return _ProgressController.instance().__exit__(*args)
 
     def __getattr__(cls, name):
-        # First check if it's a classmethod on _Group
-        attr = getattr(_Group, name, None)
+        # First check if it's a classmethod on _ProgressController
+        attr = getattr(_ProgressController, name, None)
         if attr is not None and isinstance(attr, classmethod):
             return attr.__func__
         # Otherwise delegate to singleton instance
-        return getattr(_Group.instance(), name)
+        return getattr(_ProgressController.instance(), name)
 
 
-class Group(metaclass=_GroupMeta):  # pyright: ignore[reportRedeclaration]
-    """Public facade that delegates to _Group singleton"""
+class Progress(metaclass=_ProgressMeta):  # pyright: ignore[reportRedeclaration]
+    """Public facade that delegates to _ProgressController singleton"""
 
     def __new__(cls, *args, **kwargs):
-        return _Group.instance()
+        return _ProgressController.instance()
 
     def __init__(self, *args, **kwargs):
         pass
 
     def __getattr__(self, name):
-        return getattr(_Group.instance(), name)
+        return getattr(_ProgressController.instance(), name)
 
-    Layout = _Group.Layout
-    StdProxy = _Group.StdProxy
+    Layout = _ProgressController.Layout
+    StdProxy = _ProgressController.StdProxy
 
 
 if TYPE_CHECKING:
-    Group: GroupAPI  # type: ignore[assignment]
+    Progress: ProgressAPI  # type: ignore[assignment]
 
 
 # ============================================================================
@@ -1871,10 +1871,10 @@ def _collection_watcher():
 
     while True:
         try:
-            time.sleep(_Group.instance()._watch_interval)
+            time.sleep(_ProgressController.instance()._watch_interval)
 
-            with _Group.lock():
-                group = _Group._instance
+            with _ProgressController.lock():
+                group = _ProgressController._instance
                 if group is None:
                     continue
 
@@ -1969,14 +1969,14 @@ def _terminal_width_watcher():
             _sigwinch_event.wait()
             _sigwinch_event.clear()
 
-            with _Group.lock():
-                if _Group._instance is None:
+            with _ProgressController.lock():
+                if _ProgressController._instance is None:
                     continue
 
                 global _terminal_width, _terminal_height
                 _terminal_width, _terminal_height = _get_terminal_size()
 
-                _Group._instance._refresh_internal(force_clear=True)
+                _ProgressController._instance._refresh_internal(force_clear=True)
 
             error_count = 0  # Reset on success
         except Exception:
@@ -2007,14 +2007,14 @@ class ProgressContext:
             self.bar = bar
             self.bar.total = total
         else:
-            self.bar = _Group.instance().create_bar(total=total, title=title, layouts=layouts, **kwargs)
+            self.bar = _ProgressController.instance().create_bar(total=total, title=title, layouts=layouts, **kwargs)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Ensure final display
-        group = _Group.instance()
+        group = _ProgressController.instance()
         group.display()
 
         if self.bar.remove_on_complete:
@@ -2028,12 +2028,12 @@ class ProgressContext:
     def update(self, current: int, item: Optional[BarItem] = None):
         """Update progress and display"""
         self.bar.update(current)
-        _Group.instance().display(item, self.bar)
+        _ProgressController.instance().display(item, self.bar)
 
     def increment(self, count: int = 1, item: Optional[BarItem] = None):
         """Increment progress and display"""
         self.bar.increment(count)
-        _Group.instance().display(item, self.bar)
+        _ProgressController.instance().display(item, self.bar)
 
 
 def progress(iterable,

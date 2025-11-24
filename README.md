@@ -114,7 +114,7 @@ for item in progress(
 Super Bario can watch and update a bar based on the size or consumption of a queue-like object.
 
 ```python
-from super_bario import Group, View, Bar, Theme
+from super_bario import Progress, View, Bar, Theme
 from queue import Queue
 import threading, time
 
@@ -123,12 +123,12 @@ queue = Queue()
 q = Queue(maxsize=1000)
 l = []
 
-Group.create_row_layout("row_1")
-Group.create_column_layout("col_1", parents=["row_1"])
-Group.create_column_layout("col_2", parents=["row_1"])
+Progress.create_row_layout("row_1")
+Progress.create_column_layout("col_1", parents=["row_1"])
+Progress.create_column_layout("col_2", parents=["row_1"])
 
-Group.add_watch(q, "Queue", layouts=["col_1"])
-Group.add_watch(l, "List", max=1000, layouts=["col_2"])
+Progress.add_watch(q, "Queue", layouts=["col_1"])
+Progress.add_watch(l, "List", max=1000, layouts=["col_2"])
 ```
 
 ---
@@ -138,23 +138,23 @@ Group.add_watch(l, "List", max=1000, layouts=["col_2"])
 ### Explicit bar creation
 
 ```python
-from super_bario import Bar, Group, View, Theme
+from super_bario import Bar, Progress, View, Theme
 
 bar = Bar(total=100, title="Download assets")
 view = View(bar, theme=Theme.matrix())
 
 # Bind bar to group
-Group.add_bar(bar, view)
+Progress.add_bar(bar, view)
 
 for i in range(100):
     bar.increment()
-    Group.display()
+    Progress.display()
 ```
 
 ### Nested layouts
 
 ```python
-from super_bario import Bar, View, Theme, Layout, Group
+from super_bario import Bar, View, Theme, Layout, Progress
 
 bar1 = Bar(total=100, title="Core tasks")
 bar2 = Bar(total=50, title="Subtasks")
@@ -162,20 +162,20 @@ bar2 = Bar(total=50, title="Subtasks")
 view1 = View(bar1, theme=Theme.fire())
 view2 = View(bar2, theme=Theme.minimal())
 
-Group.create_row_layout("row_1")
-Group.create_column_layout("col_1", parents=["row_1"])
-Group.create_column_layout("col_2", parents=["row_1"])
+Progress.create_row_layout("row_1")
+Progress.create_column_layout("col_1", parents=["row_1"])
+Progress.create_column_layout("col_2", parents=["row_1"])
 
-Group.create_row_layout("row_2")
+Progress.create_row_layout("row_2")
 
 
-Group.add_bar(bar1, view=view1, layouts=["col_1"])
-Group.add_bar(bar2, view=view2, layouts=["col_2"])
+Progress.add_bar(bar1, view=view1, layouts=["col_1"])
+Progress.add_bar(bar2, view=view2, layouts=["col_2"])
 
-Group.add_layout("col_1", parents=[row_2])
-Group.add_layout("col_2", parents=[row_2])
+Progress.add_layout("col_1", parents=[row_2])
+Progress.add_layout("col_2", parents=[row_2])
 
-Group.display()
+Progress.display()
 ```
 
 ---

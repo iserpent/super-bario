@@ -805,7 +805,9 @@ class View:
                  include_widgets: Optional[Set[type]] = None,
                  exclude_widgets: Optional[Set[type]] = None,
                  use_unicode: Optional[bool] = None,
-                 min_update_interval: float = 0.1):
+                 min_update_interval: float = 0.1,
+                 min_update_progress: float = 0.01,
+                 update_on_item_change: bool = True):
         """
         Create a progress bar view.
 
@@ -817,6 +819,8 @@ class View:
             exclude_widgets: Set of widget types to exclude
             use_unicode: Whether to use Unicode characters
             min_update_interval: Minimum seconds between updates
+            min_update_progress: Minimum progress change to trigger update
+            update_on_item_change: Whether to update on item change
         """
         self._bar_ref = weakref.ref(progress_bar) if progress_bar else None
 
@@ -845,6 +849,13 @@ class View:
             raise ValueError("min_update_interval must be non-negative")
 
         self.min_update_interval = min_update_interval
+
+        if min_update_progress < 0 or min_update_progress > 1.0:
+            raise ValueError("min_update_progress must be between 0.0 and 1.0")
+
+        self.min_update_progress = min_update_progress
+        self.update_on_item_change = update_on_item_change
+
         self.cache_update_interval = 60  # 1 minute
         self.last_update_time: float = 0
         self.prev_progress: float = -1.0
@@ -932,8 +943,8 @@ class View:
 
         current_time = time.time()
 
-        item_changed = bar._item != self._last_item
-        progress_changed = abs(bar.progress - last_progress_at_width) >= 0.01 or (bar.progress == 1.0 and bar.progress != last_progress_at_width)
+        item_changed = self.update_on_item_change and (bar._item != self._last_item)
+        progress_changed = abs(bar.progress - last_progress_at_width) >= self.min_update_progress or (bar.progress == 1.0 and bar.progress != last_progress_at_width)
         time_passed = (current_time - last_time_at_width) >= self.min_update_interval
 
         needs_update = item_changed or progress_changed or time_passed
@@ -1138,6 +1149,9 @@ class _ProgressController:
                  remove_on_complete: bool = False,
                  terminal_padding_right: int = 20,
                  watch_interval: float = 0.5,
+                 min_update_interval: float = 0.1,
+                 min_update_progress: float = 0.01,
+                 update_on_item_change: bool = True,
                  proxy_stdout: bool = True,
                  proxy_stderr: bool = True):
         """
@@ -1169,6 +1183,17 @@ class _ProgressController:
                 raise ValueError("watch_interval must be positive")
 
             self._watch_interval = watch_interval
+
+            if min_update_interval < 0:
+                raise ValueError("min_update_interval must be non-negative")
+
+            self._min_update_interval = min_update_interval
+
+            if min_update_progress < 0 or min_update_progress > 1.0:
+                raise ValueError("min_update_progress must be between 0.0 and 1.0")
+
+            self._min_update_progress = min_update_progress
+            self._update_on_item_change = update_on_item_change
 
             self._proxy_stdout = proxy_stdout
             self._proxy_stderr = proxy_stderr
@@ -1254,6 +1279,49 @@ class _ProgressController:
         with self.lock():
             if instance:
                 instance._watch_interval = value
+
+    @property
+    def min_update_interval(self) -> float:
+        """Minimum update interval in seconds"""
+        return self.instance()._min_update_interval
+
+    @min_update_interval.setter
+    def min_update_interval(self, value: float):
+        """Set minimum update interval"""
+        if value < 0:
+            raise ValueError("min_update_interval must be non-negative")
+        instance = self.instance()
+        with self.lock():
+            if instance:
+                instance._min_update_interval = value
+
+    @property
+    def min_update_progress(self) -> float:
+        """Minimum update progress change"""
+        return self.instance()._min_update_progress
+
+    @min_update_progress.setter
+    def min_update_progress(self, value: float):
+        """Set minimum update progress change"""
+        if value < 0 or value > 1.0:
+            raise ValueError("min_update_progress must be between 0.0 and 1.0")
+        instance = self.instance()
+        with self.lock():
+            if instance:
+                instance._min_update_progress = value
+
+    @property
+    def update_on_item_change(self) -> bool:
+        """Whether to update on item change"""
+        return self.instance()._update_on_item_change
+
+    @update_on_item_change.setter
+    def update_on_item_change(self, value: bool):
+        """Set whether to update on item change"""
+        instance = self.instance()
+        with self.lock():
+            if instance:
+                instance._update_on_item_change = bool(value)
 
     @classmethod
     def instance(cls) -> '_ProgressController':
@@ -1396,7 +1464,9 @@ class _ProgressController:
                    include_widgets: Optional[Set[type]] = None,
                    exclude_widgets: Optional[Set[type]] = None,
                    use_unicode: Optional[bool] = None,
-                   min_update_interval: float = 0.1,
+                   min_update_interval: Optional[float] = None,
+                   min_update_progress: Optional[float] = None,
+                   update_on_item_change: Optional[bool] = None,
                    **kwargs) -> Bar:
         """Create and add a new progress bar"""
         bar = Bar(*args, **kwargs, controller=self)
@@ -1411,7 +1481,9 @@ class _ProgressController:
                 include_widgets=include_widgets,
                 exclude_widgets=exclude_widgets,
                 use_unicode=use_unicode,
-                min_update_interval=min_update_interval
+                min_update_interval=min_update_interval if min_update_interval is not None else self._min_update_interval,
+                min_update_progress=min_update_progress if min_update_progress is not None else self._min_update_progress,
+                update_on_item_change=update_on_item_change if update_on_item_change is not None else self._update_on_item_change
             )
 
         self.add_bar(bar, view, layouts=layouts)
@@ -1794,6 +1866,30 @@ class ProgressAPI(Protocol):
 
     @watch_interval.setter
     def watch_interval(self, value: float) -> None:
+        ...
+
+    @property
+    def min_update_interval(self) -> float:
+        ...
+
+    @min_update_interval.setter
+    def min_update_interval(self, value: float) -> None:
+        ...
+
+    @property
+    def min_update_progress(self) -> float:
+        ...
+
+    @min_update_progress.setter
+    def min_update_progress(self, value: float) -> None:
+        ...
+
+    @property
+    def update_on_item_change(self) -> bool:
+        ...
+
+    @update_on_item_change.setter
+    def update_on_item_change(self, value: bool) -> None:
         ...
 
     def close(self) -> None:

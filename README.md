@@ -143,7 +143,7 @@ from super_bario import Bar, Progress, View, Theme
 bar = Bar(total=100, title="Download assets")
 view = View(bar, theme=Theme.matrix())
 
-# Bind bar to group
+# Bind bar to controller
 Progress.add_bar(bar, view)
 
 for i in range(100):

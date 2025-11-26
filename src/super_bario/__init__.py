@@ -629,7 +629,7 @@ class Bar:
         Args:
             total: Total number of items (0 for indeterminate)
             title: Title string or callable returning title
-            progress: Weak reference to parent progress group
+            controller: Progress controller
             remove_on_complete: Remove bar when complete
             indent: Indentation level for nested bars
             on_update: Callback on progress update (current, progress)
@@ -670,16 +670,16 @@ class Bar:
         return False
 
     def set_controller(self, controller: Optional['_ProgressController']):
-        """Set the parent progress group"""
+        """Set the progress controller"""
         self.controller_ref = weakref.ref(controller) if controller else None
 
     @contextmanager
     def lock(self):
         """Context manager for thread-safe operations"""
         if self.controller_ref is not None:
-            group = self.controller_ref()
-            if group is not None:
-                with group.lock() as lock:
+            controller = self.controller_ref()
+            if controller is not None:
+                with controller.lock() as lock:
                     yield lock
                 return
         yield None
@@ -1026,7 +1026,7 @@ class View:
 
 class _ProgressController:
     """Manages multiple progress bars with different layout modes"""
-    _instance = None
+    _instance: Optional['_ProgressController'] = None
     _lock = threading.Lock()
     _initialized = False
     _terminal_width_watcher_thread = None
@@ -1141,14 +1141,14 @@ class _ProgressController:
                  proxy_stdout: bool = True,
                  proxy_stderr: bool = True):
         """
-        Create a progress group.
+        Create a progress controller.
 
         Args:
             remove_on_complete: Clear progress bars when complete
             terminal_padding_right: Padding from right terminal edge for resizing
             watch_interval: Interval in seconds to check terminal size
-            proxy_stdout: Redirect stdout to progress group
-            proxy_stderr: Redirect stderr to progress group
+            proxy_stdout: Redirect stdout to progress controller
+            proxy_stderr: Redirect stderr to progress controller
         """
         if _ProgressController._initialized:
             return
@@ -1243,15 +1243,17 @@ class _ProgressController:
     @property
     def watch_interval(self) -> float:
         """Collection watch update interval in seconds"""
-        return self._watch_interval
+        return self.instance()._watch_interval
 
     @watch_interval.setter
     def watch_interval(self, value: float):
         """Set collection watch update interval"""
         if value <= 0:
             raise ValueError("watch_interval must be positive")
+        instance = self.instance()
         with self.lock():
-            self._watch_interval = value
+            if instance:
+                instance._watch_interval = value
 
     @classmethod
     def instance(cls) -> '_ProgressController':
@@ -1259,10 +1261,10 @@ class _ProgressController:
         return cls._instance or cls()
 
     class StdProxy:
-        """Proxy to redirect stdout/stderr to progress group"""
+        """Proxy to redirect stdout/stderr to progress controller"""
 
-        def __init__(self, group: '_ProgressController', stream: TextIO):
-            self.group = group
+        def __init__(self, controller: '_ProgressController', stream: TextIO):
+            self.controller = controller
             self.stream = stream
             self.buffer = []
 
@@ -1270,7 +1272,7 @@ class _ProgressController:
             if not data:
                 return
 
-            with self.group.lock():
+            with self.controller.lock():
                 self.buffer.append(data)
 
                 if '\n' not in data:
@@ -1293,12 +1295,12 @@ class _ProgressController:
                     data = full_data
 
                 if data:
-                    self.group._clear_internal(force=True)
+                    self.controller._clear_internal(force=True)
                     self.stream.write(data)
-                    self.group._display_internal()
+                    self.controller._display_internal()
 
         def flush(self):
-            with self.group.lock():
+            with self.controller.lock():
                 self._flush_internal()
 
         def _flush_internal(self):
@@ -1306,10 +1308,10 @@ class _ProgressController:
                 data = ''.join(itertools.chain(self.buffer, ['\n']))
                 self.buffer = []
 
-                self.group._clear_internal(force=True)
+                self.controller._clear_internal(force=True)
                 self.stream.write(data)
                 self.stream.flush()
-                self.group._display_internal()
+                self.controller._display_internal()
             else:
                 self.stream.flush()
 
@@ -1359,7 +1361,7 @@ class _ProgressController:
             _ProgressController._instance = None
 
     def add_bar(self, bar: Bar, view: View, layouts: Optional[List[str]] = None):
-        """Add a progress bar to the group"""
+        """Add a progress bar to the controller"""
         if layouts is None:
             layouts = [_DEFAULT_LAYOUT_NAME]
 
@@ -1417,7 +1419,7 @@ class _ProgressController:
         return bar
 
     def remove_bar(self, bar: Bar, layouts: Optional[List[str]] = None):
-        """Remove a progress bar from the group"""
+        """Remove a progress bar from the controller"""
         if layouts is None:
             layouts = [_DEFAULT_LAYOUT_NAME]
 
@@ -1447,7 +1449,7 @@ class _ProgressController:
 
             if not views_in_layout:
                 if bar not in self._view_usage:
-                    raise ValueError("Bar is not registered with the group")
+                    raise ValueError("Bar is not registered with the controller")
                 raise ValueError(f"Bar is not part of layout '{layout}'")
 
             for view in views_in_layout:
@@ -1755,7 +1757,7 @@ class _ProgressController:
 
 
 class ProgressAPI(Protocol):
-    """Protocol for Group class methods"""
+    """Protocol for Progress class methods"""
     def __enter__(self) -> '_ProgressController':
         ...
 
@@ -1768,6 +1770,30 @@ class ProgressAPI(Protocol):
 
     @classmethod
     def instance(cls) -> '_ProgressController':
+        ...
+
+    @property
+    def remove_on_complete(self) -> bool:
+        ...
+
+    @remove_on_complete.setter
+    def remove_on_complete(self, value: bool) -> None:
+        ...
+
+    @property
+    def terminal_padding_right(self) -> int:
+        ...
+
+    @terminal_padding_right.setter
+    def terminal_padding_right(self, value: int) -> None:
+        ...
+
+    @property
+    def watch_interval(self) -> float:
+        ...
+
+    @watch_interval.setter
+    def watch_interval(self, value: float) -> None:
         ...
 
     def close(self) -> None:
@@ -1823,21 +1849,42 @@ class ProgressAPI(Protocol):
 
 
 class _ProgressMeta(type):
-    """Metaclass to delegate class methods to _ProgressController singleton"""
+    """Metaclass to delegate class/property access to _ProgressController"""
 
-    def __enter__(self):
+    def __getattribute__(cls, name):
+        # Try normal lookup first (methods like __enter__, etc)
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            pass
+
+        controller = _ProgressController
+        inst = _ProgressController.instance()
+
+        # Check if name is a data descriptor on the controller class
+        obj = controller.__dict__.get(name)
+        if obj and hasattr(obj, "__get__"):  
+            return obj.__get__(inst, cls)
+
+        # Fallback: instance attribute
+        return getattr(inst, name)
+
+    def __setattr__(cls, name, value):
+        controller_attr = _ProgressController.__dict__.get(name)
+
+        # If controller has a descriptor with a setter → call it
+        if controller_attr and hasattr(controller_attr, "__set__"):
+            return controller_attr.__set__(_ProgressController.instance(), value)
+
+        # Otherwise assign normally
+        return super().__setattr__(name, value)
+
+    # Keep your context managers
+    def __enter__(cls):
         return _ProgressController.instance().__enter__()
 
-    def __exit__(self, *args):
+    def __exit__(cls, *args):
         return _ProgressController.instance().__exit__(*args)
-
-    def __getattr__(cls, name):
-        # First check if it's a classmethod on _ProgressController
-        attr = getattr(_ProgressController, name, None)
-        if attr is not None and isinstance(attr, classmethod):
-            return attr.__func__
-        # Otherwise delegate to singleton instance
-        return getattr(_ProgressController.instance(), name)
 
 
 class Progress(metaclass=_ProgressMeta):  # pyright: ignore[reportRedeclaration]
@@ -1874,12 +1921,12 @@ def _collection_watcher():
             time.sleep(_ProgressController.instance()._watch_interval)
 
             with _ProgressController.lock():
-                group = _ProgressController._instance
-                if group is None:
+                controller = _ProgressController._instance
+                if controller is None:
                     continue
 
-                for bar in list(group._watched_bars):
-                    collection_ref = group._watched_collections.get(bar)
+                for bar in list(controller._watched_bars):
+                    collection_ref = controller._watched_collections.get(bar)
                     if collection_ref is None:
                         continue
 
@@ -1897,7 +1944,7 @@ def _collection_watcher():
                     if bar.current != current_size:
                         bar._update_internal(current_size)
 
-                group._refresh_internal()
+                controller._refresh_internal()
 
             error_count = 0  # Reset on success
         except Exception:
@@ -2014,14 +2061,14 @@ class ProgressContext:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Ensure final display
-        group = _ProgressController.instance()
-        group.display()
+        controller = _ProgressController.instance()
+        controller.display()
 
         if self.bar.remove_on_complete:
-            group.clear(force=True)
-            group.remove_bar(self.bar, layouts=self.layouts)
+            controller.clear(force=True)
+            controller.remove_bar(self.bar, layouts=self.layouts)
 
-        group.display(force_update=True)
+        controller.display(force_update=True)
 
         return False
 

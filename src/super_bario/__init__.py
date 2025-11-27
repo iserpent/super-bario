@@ -1427,6 +1427,12 @@ class _ProgressController:
                     sys.stderr._flush_internal()
                 sys.stderr = self._original_stderr
 
+            # Restore previous SIGWINCH handler
+            try:
+                signal.signal(signal.SIGWINCH, _prev_sigwinch_handler)
+            except Exception:
+                logger.exception('Failed to restore SIGWINCH handler')
+
             self._closed = True
             _ProgressController._initialized = False
             _ProgressController._instance = None
@@ -2110,7 +2116,18 @@ def _update_terminal_width(signum, frame):
         # If we can't notify (e.g., lock is held), the polling will catch it anyway
         pass
 
+    # Chain the previous SIGWINCH handler (if any)
+    try:
+        prev = _prev_sigwinch_handler
+        if prev and prev not in (signal.SIG_DFL, signal.SIG_IGN):
+            # If it's a callable, forward the signal
+            if callable(prev):
+                prev(signum, frame)
+    except Exception:
+        logger.exception('Chained SIGWINCH handler failed')
 
+
+_prev_sigwinch_handler = signal.getsignal(signal.SIGWINCH)
 signal.signal(signal.SIGWINCH, _update_terminal_width)
 
 

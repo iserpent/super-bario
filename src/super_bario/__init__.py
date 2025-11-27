@@ -61,7 +61,9 @@ logger = logging.getLogger('super-bario')
 
 
 _DEFAULT_LAYOUT_NAME = '__default__'
-_sigwinch_event = threading.Event()
+_sigwinch_pending = False
+_sigwinch_lock = threading.Lock()
+_sigwinch_condition = threading.Condition(_sigwinch_lock)
 _terminal_width = 0
 _terminal_height = 0
 
@@ -1230,6 +1232,7 @@ class _ProgressController:
             if not _ProgressController._terminal_width_watcher_thread:
                 _ProgressController._terminal_width_watcher_thread = threading.Thread(target=_terminal_width_watcher, daemon=True)
                 _ProgressController._terminal_width_watcher_thread.start()
+                self._original_stdout.write("Watch thread started\n")
 
             if not _ProgressController._collection_watcher_thread:
                 _ProgressController._collection_watcher_thread = threading.Thread(target=_collection_watcher, daemon=True)
@@ -2097,7 +2100,15 @@ _init_terminal_width()
 
 
 def _update_terminal_width(signum, frame):
-    _sigwinch_event.set()
+    global _sigwinch_pending
+    _sigwinch_pending = True
+    # Wake up the watcher thread if it's waiting
+    # We can't acquire locks in signal handler, but notify_all() is safe when called outside the lock
+    try:
+        _sigwinch_condition.notify_all()
+    except RuntimeError:
+        # If we can't notify (e.g., lock is held), the polling will catch it anyway
+        pass
 
 
 signal.signal(signal.SIGWINCH, _update_terminal_width)
@@ -2109,17 +2120,23 @@ def _terminal_width_watcher():
 
     while True:
         try:
-            _sigwinch_event.wait()
-            _sigwinch_event.clear()
+            global _sigwinch_pending
 
-            with _ProgressController.lock():
-                if _ProgressController._instance is None:
+            with _sigwinch_condition:
+                if not _sigwinch_pending:
                     continue
 
-                global _terminal_width, _terminal_height
-                _terminal_width, _terminal_height = _get_terminal_size()
+            with _ProgressController.lock():
+                try:
+                    if _ProgressController._instance is None:
+                        continue
 
-                _ProgressController._instance._refresh_internal(force_clear=True)
+                    global _terminal_width, _terminal_height
+                    _terminal_width, _terminal_height = _get_terminal_size()
+
+                    _ProgressController._instance._refresh_internal(force_clear=True)
+                finally:
+                    _sigwinch_pending = False
 
             error_count = 0  # Reset on success
         except Exception:

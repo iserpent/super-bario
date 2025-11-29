@@ -811,7 +811,7 @@ class View:
     """View for rendering progress bar with widgets"""
 
     def __init__(self,
-                 progress_bar: Optional[Bar] = None,
+                 bar: Optional[Bar] = None,
                  widgets: Optional[List[Widget]] = None,
                  theme: Optional[Theme] = None,
                  include_widgets: Optional[Set[type]] = None,
@@ -824,7 +824,7 @@ class View:
         Create a progress bar view.
 
         Args:
-            progress_bar: Weak reference to associated progress bar
+            bar: Weak reference to associated progress bar
             widgets: List of widgets to display
             theme: Color theme
             include_widgets: Set of widget types to include
@@ -834,7 +834,7 @@ class View:
             min_update_progress: Minimum progress change to trigger update
             update_on_item_change: Whether to update on item change
         """
-        self._bar_ref = weakref.ref(progress_bar) if progress_bar else None
+        self._bar_ref = weakref.ref(bar) if bar else None
 
         # Set theme based on terminal capability if not specified
         if theme is None:
@@ -892,7 +892,7 @@ class View:
 
         title = None
         total = 0
-        bar = self.get_progress_bar()
+        bar = self.get_bar()
         if bar is not None:
             title = bar.title
             total = bar.total
@@ -916,18 +916,18 @@ class View:
 
         return widgets
 
-    def set_progress_bar(self, bar: Bar):
+    def set_bar(self, bar: Bar):
         """Set the associated progress bar"""
         self._bar_ref = weakref.ref(bar) if bar else None
 
-    def get_progress_bar(self) -> Optional[Bar]:
+    def get_bar(self) -> Optional[Bar]:
         """Get the associated progress bar"""
         return self._bar_ref() if self._bar_ref else None
 
 
     def should_update(self, width: int) -> bool:
         """Check if enough time has passed for an update"""
-        bar = self.get_progress_bar()
+        bar = self.get_bar()
         if bar is None:
             return False
 
@@ -943,7 +943,7 @@ class View:
                 self.last_update_for_width.pop(width, None)
 
     def _should_update_internal(self, width: int) -> bool:
-        bar = self.get_progress_bar()
+        bar = self.get_bar()
         if bar is None:
             return False
 
@@ -969,7 +969,7 @@ class View:
 
     def reset(self):
         """Reset widgets to initial state"""
-        bar = self.get_progress_bar()
+        bar = self.get_bar()
         if bar is None:
             return
 
@@ -979,7 +979,7 @@ class View:
 
     def render(self, available_width: int) -> List[str]:
         """Render the progress bar to a string"""
-        bar = self.get_progress_bar()
+        bar = self.get_bar()
         if bar is None:
             return []
 
@@ -1484,7 +1484,7 @@ class _ProgressController:
         bar = Bar(*args, **kwargs, controller=self)
 
         if view is not None:
-            view.set_progress_bar(bar)
+            view.set_bar(bar)
         else:
             view = View(
                 bar,
@@ -1555,6 +1555,7 @@ class _ProgressController:
     def add_watch(self,
                   collection: Union[Queue, Sized],
                   title: Union[str, Callable[[Any], str], None] = None,
+                  bar: Optional[Bar] = None,
                   max: Optional[int] = None,
                   layouts: Optional[List[str]] = None) -> Bar:
         """Add a bar to watch a collection, like queue or list"""
@@ -1563,11 +1564,12 @@ class _ProgressController:
                 max = collection.maxsize
             elif isinstance(collection, Sized):
                 max = len(collection)
-        bar = self.create_bar(title=title,
-                              total=max,
-                              layouts=layouts,
-                              theme=Theme.load(),
-                              exclude_widgets=set([TimeWidget]))
+        if bar is None:
+            bar = self.create_bar(title=title,
+                                total=max,
+                                layouts=layouts,
+                                theme=Theme.load(),
+                                exclude_widgets=set([TimeWidget]))
 
         self._watched_bars.add(bar)
         self._watched_collections[bar] = weakref.ref(collection)
@@ -1697,7 +1699,7 @@ class _ProgressController:
         """Recursively clear all bars from a layout"""
         for component in layout:
             if isinstance(component, View):
-                self._remove_bar_internal(component.get_progress_bar(), layouts=[layout.name])
+                self._remove_bar_internal(component.get_bar(), layouts=[layout.name])
             else:
                 self._remove_layout_internal(component.name, parents=[layout.name])
 
@@ -2228,6 +2230,7 @@ class ProgressContext:
 def progress(iterable,
              total: int = 0,
              title: Union[str, Callable[[Any], str], None] = None,
+             bar: Optional[Bar] = None,
              **kwargs) -> Iterator:
     """
     Wrap an iterable to display progress automatically.
@@ -2243,12 +2246,15 @@ def progress(iterable,
         **kwargs: Additional arguments for Bar
     """
     if not total:
-        try:
-            total = len(iterable)
-        except TypeError:
-            pass
+        if bar is not None:
+            total = bar.total
+        else:
+            try:
+                total = len(iterable)
+            except TypeError:
+                pass
 
-    with ProgressContext(total=total, title=title, **kwargs) as ctx:
+    with ProgressContext(total=total, title=title, bar=bar, **kwargs) as ctx:
         for index, item in enumerate(iterable, 1):
             bar_item = BarItem(index, item)
             if index == 1:

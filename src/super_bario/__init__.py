@@ -1375,7 +1375,8 @@ class _ProgressController:
                     data = full_data
 
                 if data:
-                    self.controller._clear_internal(force=True)
+                    new_line_count = data.count('\n')
+                    self.controller._clear_internal(force_top_lines=new_line_count+1)
                     self.stream.write(data)
                     self.controller._display_internal()
 
@@ -1388,7 +1389,8 @@ class _ProgressController:
                 data = ''.join(itertools.chain(self.buffer, ['\n']))
                 self.buffer = []
 
-                self.controller._clear_internal(force=True)
+                new_line_count = data.count('\n')
+                self.controller._clear_internal(force_top_lines=new_line_count+1)
                 self.stream.write(data)
                 self.stream.flush()
                 self.controller._display_internal()
@@ -1755,11 +1757,9 @@ class _ProgressController:
             self._original_stderr.write('\033[?25l')
 
             lines = self._render_internal()
-            if len(lines) < self._last_lines_drawn_count:
-                force_clear = True
 
             # Clear previous lines
-            self._clear_internal(force=force_clear)
+            self._clear_internal(force_top_lines=self._last_lines_drawn_count - len(lines))
 
             self._display_internal(lines=lines, final=final)
         except Exception:
@@ -1805,15 +1805,15 @@ class _ProgressController:
         self._original_stderr.flush()
         self._last_lines_drawn_count = len(lines)
 
-    def clear(self, force: bool = False):
+    def clear(self, force: bool = False, force_top_lines: int = 0, force_bottom_lines: int = 0):
         """Clear the displayed progress bars"""
         if not self._is_in_tty or self._quiet:
             return
 
         with self.lock():
-            self._clear_internal(force=force)
+            self._clear_internal(force=force, force_top_lines=force_top_lines, force_bottom_lines=force_bottom_lines)
 
-    def _clear_internal(self, force: bool = False):
+    def _clear_internal(self, force: bool = False, force_top_lines: int = 0, force_bottom_lines: int = 0):
         """Clear the displayed progress bars"""
         if not self._is_in_tty or self._quiet:
             return
@@ -1824,16 +1824,21 @@ class _ProgressController:
         lines_to_clear = self._last_lines_drawn_count
         clear_sequence = []
 
-        if force:
+        if force or force_top_lines + force_bottom_lines >= lines_to_clear:
             # Move to beginning of current line and clear it
             clear_sequence.append('\r\033[K')
             # Move up and clear each previous line
-            if lines_to_clear > 1:
-                clear_sequence.append('\033[F\033[K' * (lines_to_clear - 1))  # Move up one line and clear from cursor to end of line
+            clear_sequence.append('\033[F\033[K' * (lines_to_clear - 1))  # Move up one line and clear from cursor to end of line
+        elif force_top_lines > 0 or force_bottom_lines > 0:
+            clear_sequence.append('\033[F'.join(['\r\033[K'] * force_bottom_lines))  # Clear bottom forced lines
+
+            lines_to_skip = lines_to_clear - force_top_lines - force_bottom_lines
+            clear_sequence.append('\033[F' * lines_to_skip)  # Move up to the first line to clear
+
+            clear_sequence.append('\033[F'.join(['\r\033[K'] * force_top_lines))  # Clear top forced lines
         else:
             # Move cursor up to the first line
-            if lines_to_clear > 1:
-                clear_sequence.append('\033[F' * (lines_to_clear - 1))
+            clear_sequence.append('\033[F' * (lines_to_clear - 1))
 
         # Move to beginning of first line
         clear_sequence.append('\r')

@@ -44,6 +44,7 @@ import logging
 __all__ = [
     'progress',
     'Progress',
+    'add_custom_bar',
     'ProgressContext',
     'Bar',
     'BarItem',
@@ -1652,11 +1653,11 @@ class _ProgressController:
 
         return descendants
 
-    def create_row_layout(self, name: str, parents: Optional[List[str]] = None):
+    def create_row(self, name: str, parents: Optional[List[str]] = None):
         """Create a layout that arranges bars side by side"""
         self.create_layout(name, type=_ProgressController.Layout.Type.ROW, parents=parents)
 
-    def create_column_layout(self, name: str, parents: Optional[List[str]] = None):
+    def create_column(self, name: str, parents: Optional[List[str]] = None):
         """Create a layout that arranges bars stacked vertically"""
         self.create_layout(name, type=_ProgressController.Layout.Type.COLUMN, parents=parents)
 
@@ -1934,10 +1935,10 @@ class ProgressAPI(Protocol):
     def create_layout(self, name: str, type: _ProgressController.Layout.Type = ..., parents: Optional[List[str]] = None) -> None:
         ...
 
-    def create_row_layout(self, name: str, parents: Optional[List[str]] = None) -> None:
+    def create_row(self, name: str, parents: Optional[List[str]] = None) -> None:
         ...
 
-    def create_column_layout(self, name: str, parents: Optional[List[str]] = None) -> None:
+    def create_column(self, name: str, parents: Optional[List[str]] = None) -> None:
         ...
 
     def add_layout(self, name: str, parents: Optional[List[str]] = None) -> None:
@@ -2213,10 +2214,8 @@ class ProgressContext:
         controller.display()
 
         if self.bar.remove_on_complete:
-            controller.clear(force=True)
             controller.remove_bar(self.bar, layouts=self.layouts)
-
-        controller.display(force_update=True)
+            controller.display(force_update=True)
 
         return False
 
@@ -2265,3 +2264,81 @@ def progress(iterable,
                 ctx.update(index, item=bar_item)
             yield item
             ctx.update(index, item=bar_item)
+
+
+def add_custom_bar(**kwargs):
+    bar_args = [
+        "total",
+        "title",
+        "controller",
+        "remove_on_complete",
+        "indent",
+        "on_update",
+        "on_complete",
+    ]
+    bar_config = {key: kwargs[key] for key in bar_args if key in kwargs}
+
+    title_widget_args = [
+        "title",
+        "theme",
+    ]
+    title_widget_config = {key: kwargs[key] for key in title_widget_args if key in kwargs}
+
+    bar_widget_args = [
+        "use_unicode",
+        "theme",
+        "char_start_bracket",
+        "char_end_bracket",
+        "char_complete",
+        "char_incomplete",
+        "block_fractions",
+    ]
+    bar_widget_config = {key: kwargs[key] for key in bar_widget_args if key in kwargs}
+
+    percentage_widget_args = [
+        "theme",
+    ]
+    percentage_widget_config = {key: kwargs[key] for key in percentage_widget_args if key in kwargs}
+
+    counter_widget_args = [
+        "theme",
+    ]
+    counter_widget_config = {key: kwargs[key] for key in counter_widget_args if key in kwargs}
+
+    time_widget_args = [
+        "show_eta",
+        "show_elapsed",
+    ]
+    time_widget_config = {key: kwargs[key] for key in time_widget_args if key in kwargs}
+
+    widgets = [
+        TitleWidget(**title_widget_config),
+        BarWidget(**bar_widget_config),
+        PercentageWidget(**percentage_widget_config),
+        CounterWidget(**counter_widget_config),
+        TimeWidget(**time_widget_config)
+    ]
+
+    view_args = [
+        "bar",
+        "widgets",
+        "theme",
+        "include_widgets",
+        "exclude_widgets",
+        "use_unicode",
+        "min_update_interval",
+        "min_update_progress",
+        "update_on_item_change",
+    ]
+    view_config = {key: kwargs[key] for key in view_args if key in kwargs}
+
+    bar = Bar(**bar_config)
+
+    view_config["bar"] = view_config.get("bar", bar)
+    view_config["widgets"] = view_config.get("widgets", widgets)
+
+    view = View(**view_config)
+
+    Progress.add_bar(bar, view, layouts=kwargs.pop("layouts"))
+
+    return bar

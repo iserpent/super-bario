@@ -35,24 +35,24 @@ def example_0():
             time.sleep(random.uniform(0.4, 0.5))
             print(f"Demo of the multi-threaded stderr handling: Step {i}", file=sys.stderr)
 
-    Progress.create_row_layout("h_layout1")
-    Progress.create_row_layout("h_layout2")
-    Progress.create_row_layout("h_layout3")
-    Progress.create_row_layout("h_layout4")
+    Progress.create_row("h_layout1")
+    Progress.create_row("h_layout2")
+    Progress.create_row("h_layout3")
+    Progress.create_row("h_layout4")
 
-    Progress.create_column_layout("v_layout1_1", parents=["h_layout1"])
-    Progress.create_column_layout("v_layout2_1", parents=["h_layout1"])
-    Progress.create_column_layout("v_layout3_1", parents=["h_layout1"])
+    Progress.create_column("v_layout1_1", parents=["h_layout1"])
+    Progress.create_column("v_layout2_1", parents=["h_layout1"])
+    Progress.create_column("v_layout3_1", parents=["h_layout1"])
 
-    Progress.create_column_layout("v_layout1_2", parents=["h_layout2"])
-    Progress.create_column_layout("v_layout2_2", parents=["h_layout2"])
-    Progress.create_column_layout("v_layout3_2", parents=["h_layout2"])
+    Progress.create_column("v_layout1_2", parents=["h_layout2"])
+    Progress.create_column("v_layout2_2", parents=["h_layout2"])
+    Progress.create_column("v_layout3_2", parents=["h_layout2"])
 
-    Progress.create_column_layout("v_layout1_3", parents=["h_layout3"])
-    Progress.create_column_layout("v_layout2_3", parents=["h_layout3"])
+    Progress.create_column("v_layout1_3", parents=["h_layout3"])
+    Progress.create_column("v_layout2_3", parents=["h_layout3"])
 
-    Progress.create_column_layout("v_layout1_4", parents=["h_layout4"])
-    Progress.create_column_layout("v_layout2_4", parents=["h_layout4"])
+    Progress.create_column("v_layout1_4", parents=["h_layout4"])
+    Progress.create_column("v_layout2_4", parents=["h_layout4"])
 
 
     Progress.add_layout("h_layout2", parents=["v_layout1_4"])
@@ -117,10 +117,10 @@ def example_2():
     for i in range(1, 301 + 1):
         q2.put_nowait(i)
 
-    Progress.create_row_layout("h_layout1")
+    Progress.create_row("h_layout1")
 
-    Progress.create_column_layout("v_layout1", parents=["h_layout1"])
-    Progress.create_column_layout("v_layout2", parents=["h_layout1"])
+    Progress.create_column("v_layout1", parents=["h_layout1"])
+    Progress.create_column("v_layout2", parents=["h_layout1"])
 
     Progress.add_watch(q1, "Queue 1", layouts=["v_layout1"])
     Progress.add_watch(q2, "Queue 2", layouts=["v_layout2"])

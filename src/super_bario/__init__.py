@@ -1836,6 +1836,9 @@ class _ProgressController:
         else:
             lines_to_skip = lines_to_clear - force_top_lines - force_bottom_lines - 1
 
+            bottom_to_clear = max(0, force_bottom_lines - force_top_lines)
+            lines_to_skip += force_bottom_lines - bottom_to_clear
+
             clear_sequence.append('\r\033[K\033[F' * force_bottom_lines)
             clear_sequence.append('\033[F' * lines_to_skip)  # Move cursor up to the first line to clear
             clear_sequence.append('\033[F\r\033[K' * force_top_lines)

@@ -1443,8 +1443,20 @@ class _ProgressController:
             _ProgressController._initialized = False
             _ProgressController._instance = None
 
-    def add_bar(self, bar: Bar, view: View, layouts: Optional[List[str]] = None):
+    def contains_bar(self, bar: Bar) -> bool:
+        """Check if a progress bar is active in the controller"""
+        with self.lock():
+            return bar in self._active_bars
+
+    def add_bar(self,
+                bar: Bar,
+                view: Optional[View] = None,
+                layouts: Optional[List[str]] = None,
+                **kwargs):
         """Add a progress bar to the controller"""
+        if view is None:
+            view = self.create_view(bar, **kwargs)
+
         if layouts is None:
             layouts = [_DEFAULT_LAYOUT_NAME]
 
@@ -1453,6 +1465,7 @@ class _ProgressController:
 
     def _add_bar_internal(self, bar: Bar, view: View, layouts: List[str]):
         bar.set_controller(self)
+        view.set_bar(bar)
 
         self._active_bars.add(bar)
 
@@ -1470,38 +1483,21 @@ class _ProgressController:
                 self._view_usage[bar][view] = 0
             self._view_usage[bar][view] += 1
 
-    def create_bar(self,
-                   *args,
-                   view: Optional[View] = None,
-                   layouts: Optional[List[str]] = None,
-                   widgets: Optional[List[Widget]] = None,
-                   theme: Optional[Theme] = None,
-                   include_widgets: Optional[Set[type]] = None,
-                   exclude_widgets: Optional[Set[type]] = None,
-                   use_unicode: Optional[bool] = None,
-                   min_update_interval: Optional[float] = None,
-                   min_update_progress: Optional[float] = None,
-                   update_on_item_change: Optional[bool] = None,
-                   **kwargs) -> Bar:
+    def create_bar(self, **kwargs) -> Bar:
         """Create and add a new progress bar"""
-        bar = Bar(*args, **kwargs, controller=self)
+        bar_args = [
+            "total",
+            "title",
+            "controller",
+            "remove_on_complete",
+            "indent",
+            "on_update",
+            "on_complete",
+        ]
+        bar_config = {key: kwargs[key] for key in bar_args if key in kwargs}
+        bar = Bar(**bar_config)
 
-        if view is not None:
-            view.set_bar(bar)
-        else:
-            view = View(
-                bar,
-                widgets=widgets,
-                theme=theme,
-                include_widgets=include_widgets,
-                exclude_widgets=exclude_widgets,
-                use_unicode=use_unicode,
-                min_update_interval=min_update_interval if min_update_interval is not None else self._min_update_interval,
-                min_update_progress=min_update_progress if min_update_progress is not None else self._min_update_progress,
-                update_on_item_change=update_on_item_change if update_on_item_change is not None else self._update_on_item_change
-            )
-
-        self.add_bar(bar, view, layouts=layouts)
+        self.add_bar(bar, **kwargs)
 
         return bar
 
@@ -1554,6 +1550,25 @@ class _ProgressController:
                 self._bar_usage.pop(bar, None)
                 self._view_usage.pop(bar, None)
                 bar.set_controller(None)
+
+    def create_view(self,
+                    bar: Optional[Bar] = None,
+                    **kwargs) -> View:
+        view_args = [
+            "widgets",
+            "theme",
+            "include_widgets",
+            "exclude_widgets",
+            "use_unicode",
+            "min_update_interval",
+            "min_update_progress",
+            "update_on_item_change",
+        ]
+        view_config = {key: kwargs[key] for key in view_args if key in kwargs}
+
+        view = View(bar, **view_config)
+
+        return view
 
     def add_watch(self,
                   collection: Union[Queue, Sized],
@@ -1917,13 +1932,19 @@ class ProgressAPI(Protocol):
     def close(self) -> None:
         ...
 
-    def add_bar(self, bar: Bar, view: View, layouts: Optional[List[str]] = None) -> None:
+    def contains_bar(self, bar: Bar) -> bool:
         ...
 
-    def create_bar(self, *args, **kwargs) -> Bar:
+    def add_bar(self, bar: Bar, view: Optional[View] = None, layouts: Optional[List[str]] = None, **kwargs) -> None:
+        ...
+
+    def create_bar(self, view: Optional[View] = None, layouts: Optional[List[str]] = None, **kwargs) -> Bar:
         ...
 
     def remove_bar(self, bar: Bar, layouts: Optional[List[str]] = None) -> None:
+        ...
+
+    def create_view(self, bar: Optional[Bar] = None, **kwargs) -> View:
         ...
 
     def add_watch(self, collection: Union[Queue, Sized], title: Union[str, Callable[[Any], str], None] = None, max: Optional[int] = None, layouts: Optional[List[str]] = None) -> Bar:
@@ -2205,15 +2226,17 @@ class ProgressContext:
         if bar is not None:
             self.bar = bar
             self.bar.total = total
+            if not Progress.contains_bar(self.bar):
+                Progress.add_bar(self.bar, layouts=layouts, **kwargs)
         else:
-            self.bar = _ProgressController.instance().create_bar(total=total, title=title, layouts=layouts, **kwargs)
+            self.bar = Progress.create_bar(total=total, title=title, layouts=layouts, **kwargs)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Ensure final display
-        controller = _ProgressController.instance()
+        controller = Progress.instance()
         controller.display()
 
         if self.bar.remove_on_complete:
@@ -2225,12 +2248,12 @@ class ProgressContext:
     def update(self, current: int, item: Optional[BarItem] = None):
         """Update progress and display"""
         self.bar.update(current)
-        _ProgressController.instance().display(item, self.bar)
+        Progress.instance().display(item, self.bar)
 
     def increment(self, count: int = 1, item: Optional[BarItem] = None):
         """Increment progress and display"""
         self.bar.increment(count)
-        _ProgressController.instance().display(item, self.bar)
+        Progress.instance().display(item, self.bar)
 
 
 def progress(iterable,

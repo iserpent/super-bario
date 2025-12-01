@@ -44,7 +44,6 @@ import logging
 __all__ = [
     'progress',
     'Progress',
-    'add_custom_bar',
     'ProgressContext',
     'Bar',
     'BarItem',
@@ -1551,6 +1550,83 @@ class _ProgressController:
                 self._view_usage.pop(bar, None)
                 bar.set_controller(None)
 
+    def add_custom_bar(self, **kwargs):
+        bar_args = [
+            "total",
+            "title",
+            "controller",
+            "remove_on_complete",
+            "indent",
+            "on_update",
+            "on_complete",
+        ]
+        bar_config = {key: kwargs[key] for key in bar_args if key in kwargs}
+
+        title_widget_args = [
+            "title",
+            "theme",
+        ]
+        title_widget_config = {key: kwargs[key] for key in title_widget_args if key in kwargs}
+
+        bar_widget_args = [
+            "use_unicode",
+            "theme",
+            "char_start_bracket",
+            "char_end_bracket",
+            "char_complete",
+            "char_incomplete",
+            "block_fractions",
+        ]
+        bar_widget_config = {key: kwargs[key] for key in bar_widget_args if key in kwargs}
+
+        percentage_widget_args = [
+            "theme",
+        ]
+        percentage_widget_config = {key: kwargs[key] for key in percentage_widget_args if key in kwargs}
+
+        counter_widget_args = [
+            "theme",
+        ]
+        counter_widget_config = {key: kwargs[key] for key in counter_widget_args if key in kwargs}
+
+        time_widget_args = [
+            "show_eta",
+            "show_elapsed",
+        ]
+        time_widget_config = {key: kwargs[key] for key in time_widget_args if key in kwargs}
+
+        widgets = [
+            TitleWidget(**title_widget_config),
+            BarWidget(**bar_widget_config),
+            PercentageWidget(**percentage_widget_config),
+            CounterWidget(**counter_widget_config),
+            TimeWidget(**time_widget_config)
+        ]
+
+        view_args = [
+            "bar",
+            "widgets",
+            "theme",
+            "include_widgets",
+            "exclude_widgets",
+            "use_unicode",
+            "min_update_interval",
+            "min_update_progress",
+            "update_on_item_change",
+        ]
+        view_config = {key: kwargs[key] for key in view_args if key in kwargs}
+
+        bar = Bar(**bar_config)
+
+        view_config["bar"] = view_config.get("bar", bar)
+        view_config["widgets"] = view_config.get("widgets", widgets)
+
+        view = View(**view_config)
+
+        self.add_bar(bar, view, layouts=kwargs.pop("layouts"))
+
+        return bar
+
     def create_view(self,
                     bar: Optional[Bar] = None,
                     **kwargs) -> View:
@@ -1944,6 +2020,9 @@ class ProgressAPI(Protocol):
     def remove_bar(self, bar: Bar, layouts: Optional[List[str]] = None) -> None:
         ...
 
+    def add_custom_bar(self, **kwargs):
+        ...
+
     def create_view(self, bar: Optional[Bar] = None, **kwargs) -> View:
         ...
 
@@ -2290,81 +2369,3 @@ def progress(iterable,
                 ctx.update(index, item=bar_item)
             yield item
             ctx.update(index, item=bar_item)
-
-
-def add_custom_bar(**kwargs):
-    bar_args = [
-        "total",
-        "title",
-        "controller",
-        "remove_on_complete",
-        "indent",
-        "on_update",
-        "on_complete",
-    ]
-    bar_config = {key: kwargs[key] for key in bar_args if key in kwargs}
-
-    title_widget_args = [
-        "title",
-        "theme",
-    ]
-    title_widget_config = {key: kwargs[key] for key in title_widget_args if key in kwargs}
-
-    bar_widget_args = [
-        "use_unicode",
-        "theme",
-        "char_start_bracket",
-        "char_end_bracket",
-        "char_complete",
-        "char_incomplete",
-        "block_fractions",
-    ]
-    bar_widget_config = {key: kwargs[key] for key in bar_widget_args if key in kwargs}
-
-    percentage_widget_args = [
-        "theme",
-    ]
-    percentage_widget_config = {key: kwargs[key] for key in percentage_widget_args if key in kwargs}
-
-    counter_widget_args = [
-        "theme",
-    ]
-    counter_widget_config = {key: kwargs[key] for key in counter_widget_args if key in kwargs}
-
-    time_widget_args = [
-        "show_eta",
-        "show_elapsed",
-    ]
-    time_widget_config = {key: kwargs[key] for key in time_widget_args if key in kwargs}
-
-    widgets = [
-        TitleWidget(**title_widget_config),
-        BarWidget(**bar_widget_config),
-        PercentageWidget(**percentage_widget_config),
-        CounterWidget(**counter_widget_config),
-        TimeWidget(**time_widget_config)
-    ]
-
-    view_args = [
-        "bar",
-        "widgets",
-        "theme",
-        "include_widgets",
-        "exclude_widgets",
-        "use_unicode",
-        "min_update_interval",
-        "min_update_progress",
-        "update_on_item_change",
-    ]
-    view_config = {key: kwargs[key] for key in view_args if key in kwargs}
-
-    bar = Bar(**bar_config)
-
-    view_config["bar"] = view_config.get("bar", bar)
-    view_config["widgets"] = view_config.get("widgets", widgets)
-
-    view = View(**view_config)
-
-    Progress.add_bar(bar, view, layouts=kwargs.pop("layouts"))
-
-    return bar

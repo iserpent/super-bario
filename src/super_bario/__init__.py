@@ -237,6 +237,12 @@ class Theme:
 
 class Widget(ABC):
     """Base class for progress bar widgets"""
+    _render_priority: int = 100
+
+    @property
+    def render_priority(self) -> int:
+        """Render priority for widget ordering (lower is rendered first)"""
+        return self._render_priority
 
     def reset(self, *args, theme: Optional[Theme] = None, **kwargs):
         """Reset any internal state"""
@@ -265,6 +271,7 @@ class Widget(ABC):
 
 class TitleWidget(Widget):
     """Widget displaying the title/description"""
+    _render_priority = 50
 
     def __init__(self, title: Union[str, Callable[[Any], str]] = "Progress", theme: Optional[Theme] = None):
         self.title_fn: Optional[Callable[[Any], str]] = None
@@ -297,6 +304,7 @@ class TitleWidget(Widget):
 
 class BarWidget(Widget):
     """Widget displaying the actual progress bar"""
+    _render_priority = 40
 
     def __init__(self,
                  use_unicode: Optional[bool] = None,
@@ -450,6 +458,7 @@ class BarWidget(Widget):
 
 class PercentageWidget(Widget):
     """Widget displaying percentage"""
+    _render_priority = 10
 
     def __init__(self, theme: Optional[Theme] = None):
         self.reset(theme=theme)
@@ -463,6 +472,7 @@ class PercentageWidget(Widget):
 
 class TimeWidget(Widget):
     """Widget displaying time information"""
+    _render_priority = 20
 
     def __init__(self, show_eta: bool = True, show_elapsed: bool = True, theme: Optional[Theme] = None):
         self.show_eta = show_eta
@@ -506,6 +516,7 @@ class TimeWidget(Widget):
 
 class CounterWidget(Widget):
     """Widget displaying current/total count"""
+    _render_priority = 20
 
     def __init__(self, theme: Optional[Theme] = None):
         self.reset(theme=theme)
@@ -523,6 +534,7 @@ class CounterWidget(Widget):
 
 class SpinnerWidget(Widget):
     """Animated spinner for indeterminate progress"""
+    _render_priority = 20
 
     FRAMES_SNAKE = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
     FRAMES_DOTS = ['⣷', '⣯', '⣟', '⡿', '⢿', '⣻', '⣽', '⣾']
@@ -574,6 +586,7 @@ class SpinnerWidget(Widget):
 
 class RateWidget(Widget):
     """Widget displaying processing rate"""
+    _render_priority = 40
 
     def __init__(self, theme: Optional[Theme] = None):
         self._lock = threading.Lock()
@@ -1001,12 +1014,13 @@ class View:
         """Render the progress bar to a string"""
         # Render: first pass
         fixed_width = 0
+        bar_widget_min_width = 5
         expandable_widget_idx = None
         rendered_widgets = []
 
         widget_count_without_bar = sum(1 for w in self.widgets if not isinstance(w, BarWidget))
         num_spaces = len(self.widgets) - 1
-        widget_available_width = (available_width - bar.indent - num_spaces) // max(1, widget_count_without_bar)
+        widget_available_width = max(0, available_width - bar_widget_min_width - bar.indent - num_spaces) // max(1, widget_count_without_bar)
 
         context = {
             'item': bar._item,
@@ -1022,12 +1036,33 @@ class View:
                 rendered_widgets.append(rendered)
                 fixed_width += len(rendered[0])
 
+        # Some widgets may require less space then widget_available_width, so re-render them with leftover space
+
+        widgets_by_priority = sorted(enumerate(self.widgets), key=lambda x: x[1].render_priority)
+        second_pass_widget_indexes = []
+
+        for idx, _ in widgets_by_priority:
+            rendered = rendered_widgets[idx]
+            if rendered is None or len(rendered[0]) < widget_available_width:
+                continue
+            second_pass_widget_indexes.append(idx)
+            fixed_width -= len(rendered[0])
+
+        widget_available_width = max(0, available_width - bar_widget_min_width - bar.indent - num_spaces - fixed_width)
+
+        for idx in second_pass_widget_indexes:
+            widget = self.widgets[idx]
+            context['available_width'] = widget_available_width
+            rendered = widget.render(bar, context)
+            rendered_widgets[idx] = rendered
+            fixed_width += len(rendered[0])
+            widget_available_width = max(0, widget_available_width - len(rendered[0]))
+
         # Calculate available width for bar
-        indent_str = ' ' * bar.indent
-        bar_width = available_width - fixed_width - num_spaces - len(indent_str)
-        context['available_width'] = bar_width
 
         if expandable_widget_idx is not None:
+            bar_width = available_width - fixed_width - bar.indent - num_spaces
+            context['available_width'] = bar_width
             bar_widget = self.widgets[expandable_widget_idx]
             rendered_widgets[expandable_widget_idx] = bar_widget.render(bar, context)
 
@@ -1036,6 +1071,7 @@ class View:
         if not parts:
             return [' ' * available_width]
 
+        indent_str = ' ' * bar.indent
         rendered = indent_str + ' '.join(parts)
         width = sum(len(w[0]) for w in rendered_widgets if w) + len(indent_str) + (len(parts) - 1)
         padding = ' ' * (available_width - width) if available_width > width else ''

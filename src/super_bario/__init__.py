@@ -252,13 +252,12 @@ class Widget(ABC):
             self.theme = Theme.default()
 
     @abstractmethod
-    def render(self, bar: 'Bar', context: dict) -> Tuple[str, str]:
+    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
         """Render the widget to a raw and styled string"""
         pass
 
-    def _trim(self, text: str, context: dict) -> str:
+    def _trim(self, text: str, width: int) -> str:
         """Trim text to fit within the specified width"""
-        width = context.get('available_width', 0)
         if width <= 0:
             return ''
 
@@ -271,7 +270,7 @@ class Widget(ABC):
 
 class TitleWidget(Widget):
     """Widget displaying the title/description"""
-    _render_priority = 50
+    _render_priority = 40
 
     def __init__(self, title: Union[str, Callable[[Any], str]] = "Progress", theme: Optional[Theme] = None):
         self.title_fn: Optional[Callable[[Any], str]] = None
@@ -289,14 +288,13 @@ class TitleWidget(Widget):
                 self._title = title
                 self._width = len(str(title))
 
-    def render(self, bar: 'Bar', context: dict) -> Tuple[str, str]:
-        item = context.get('item')
+    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
         prepared = self._title
 
-        if item is not None and self.title_fn:
-            prepared = self.title_fn(item)
+        if bar.item is not None and self.title_fn:
+            prepared = self.title_fn(bar.item)
 
-        prepared = self._trim(prepared, context)
+        prepared = self._trim(prepared, width)
         rendered = f'{self.theme.title_color}{prepared}{Colors.RESET}'
 
         return (prepared, rendered)
@@ -304,7 +302,7 @@ class TitleWidget(Widget):
 
 class BarWidget(Widget):
     """Widget displaying the actual progress bar"""
-    _render_priority = 40
+    _render_priority = 50
 
     def __init__(self,
                  use_unicode: Optional[bool] = None,
@@ -381,14 +379,13 @@ class BarWidget(Widget):
                 incomplete_part = self.char_incomplete * remaining_width
         return complete_part, incomplete_part
 
-    def render(self, bar: 'Bar', context: dict) -> Tuple[str, str]:
-        available_width = context['available_width']
-        width = available_width - len(self.char_start_bracket) - len(self.char_end_bracket)
+    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
+        inner_width = width - len(self.char_start_bracket) - len(self.char_end_bracket)
 
         if bar.total == 0:
             # Indeterminate progress
-            content = self.char_start_bracket + '-' * width + self.char_end_bracket
-            content = self._trim(content, context)
+            content = self.char_start_bracket + '-' * inner_width + self.char_end_bracket
+            content = self._trim(content, width)
             return (content, f'{self.theme.bar_incomplete_color}{content}{Colors.RESET}')
 
         progress_ratio = min(1.0, bar.progress)
@@ -403,44 +400,44 @@ class BarWidget(Widget):
 
         if self.use_unicode:
             # Smooth progress with partial blocks
-            filled_blocks = progress_ratio * width
+            filled_blocks = progress_ratio * inner_width
             full_blocks = int(filled_blocks)
             partial_block_index = int((filled_blocks - full_blocks) * (len(self.block_fractions) - 1))
 
             # Only add partial block if there's actual progress beyond full blocks
-            has_partial = full_blocks < width and partial_block_index > 0
+            has_partial = full_blocks < inner_width and partial_block_index > 0
             partial_char = self.block_fractions[partial_block_index] if has_partial else ''
-            incomplete_count = width - full_blocks - (1 if has_partial else 0)
+            incomplete_count = inner_width - full_blocks - (1 if has_partial else 0)
 
             content = (self.char_start_bracket +
                        self.char_complete * full_blocks +
                        partial_char +
                        self.char_incomplete * incomplete_count +
                        self.char_end_bracket)
-            content = self._trim(content, context)
+            content = self._trim(content, width)
 
             return (content, f'{bar_color}{content}{Colors.RESET}')
 
         else:
             # Classic style with complete/incomplete characters
-            filled_width = int(width * progress_ratio)
+            filled_width = int(inner_width * progress_ratio)
 
             if progress_ratio >= 1.0:
-                content = self.char_start_bracket + self.char_complete * width + self.char_end_bracket
-                content = self._trim(content, context)
+                content = self.char_start_bracket + self.char_complete * inner_width + self.char_end_bracket
+                content = self._trim(content, width)
                 return (content, f'{bar_color}{content}{Colors.RESET}')
             else:
                 complete_part = self.char_complete * filled_width
-                incomplete_part = self.char_incomplete * (width - filled_width)
+                incomplete_part = self.char_incomplete * (inner_width - filled_width)
                 content = self.char_start_bracket + complete_part + incomplete_part + self.char_end_bracket
-                trimmed_content = self._trim(content, context)
+                trimmed_content = self._trim(content, width)
 
                 if not trimmed_content:
                     return ('', '')
 
                 # Recalculate parts after trimming
                 complete_part, incomplete_part = self._recalculate_trimmed_parts(
-                    width,
+                    inner_width,
                     filled_width,
                     trimmed_content,
                     complete_part,
@@ -463,9 +460,9 @@ class PercentageWidget(Widget):
     def __init__(self, theme: Optional[Theme] = None):
         self.reset(theme=theme)
 
-    def render(self, bar: 'Bar', context: dict) -> Tuple[str, str]:
+    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
         prepared = '{:>2.0%}'.format(bar.progress)
-        prepared = self._trim(prepared, context)
+        prepared = self._trim(prepared, width)
         rendered = f'{self.theme.percentage_color}{prepared}{Colors.RESET}'
         return (prepared, rendered)
 
@@ -489,12 +486,12 @@ class TimeWidget(Widget):
         if show_elapsed is not None:
             self.show_elapsed = show_elapsed
 
-    def render(self, bar: 'Bar', context: dict) -> Tuple[str, str]:
+    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
         parts = []
 
         if self.show_elapsed:
             elapsed = self._format_seconds(bar.elapsed_time())
-            parts.append(f'ELA {elapsed}')
+            parts.append(f'{elapsed}')
 
         if self.show_eta and bar.progress < 1.0:
             eta = bar.estimated_time()
@@ -502,7 +499,7 @@ class TimeWidget(Widget):
                 parts.append(f'ETA {eta}')
 
         prepared = ' '.join(parts)
-        prepared = self._trim(prepared, context)
+        prepared = self._trim(prepared, width)
 
         rendered = f'{self.theme.time_color}{prepared}{Colors.RESET}'
         return (prepared, rendered)
@@ -521,12 +518,12 @@ class CounterWidget(Widget):
     def __init__(self, theme: Optional[Theme] = None):
         self.reset(theme=theme)
 
-    def render(self, bar: 'Bar', context: dict) -> Tuple[str, str]:
+    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
         if bar.total > 0:
             prepared = f'{bar.current}/{bar.total}'
         else:
             prepared = f'{bar.current}'
-        prepared = self._trim(prepared, context)
+        prepared = self._trim(prepared, width)
 
         rendered = f'{self.theme.counter_color}{prepared}{Colors.RESET}'
         return (prepared, rendered)
@@ -572,13 +569,13 @@ class SpinnerWidget(Widget):
 
         self.frame_idx = 0
 
-    def render(self, bar: 'Bar', context: dict) -> Tuple[str, str]:
+    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
         if bar.total == 0:
             with self._lock:
                 prepared = self.frames[self.frame_idx % len(self.frames)]
                 self.frame_idx += 1
 
-            prepared = self._trim(prepared, context)
+            prepared = self._trim(prepared, width)
             rendered = f'{self.theme.bar_complete_color}{prepared}{Colors.RESET}'
             return (prepared, rendered)
         return ('', '')
@@ -598,7 +595,7 @@ class RateWidget(Widget):
         self.last_count = 0
         self.current_rate = 0.0
 
-    def render(self, bar: 'Bar', context: dict) -> Tuple[str, str]:
+    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
         with self._lock:
             prepared = ''
             if self.last_time is None:
@@ -616,7 +613,7 @@ class RateWidget(Widget):
 
                 prepared = f'{self.current_rate:.1f} it/s'
 
-            prepared = self._trim(prepared, context)
+            prepared = self._trim(prepared, width)
 
         rendered = f'{self.theme.counter_color}{prepared}{Colors.RESET}'
         return (prepared, rendered)
@@ -768,6 +765,11 @@ class Bar:
         self.progress = 0.0
         self.start_time = None
         self._was_complete = False
+
+    @property
+    def item(self) -> Optional[BarItem]:
+        """Get current item being processed"""
+        return self._item
 
     def set_item(self, item: BarItem):
         """Set current item being processed"""
@@ -990,91 +992,57 @@ class View:
             for widget in self.widgets:
                 widget.reset()
 
-    def render(self, available_width: int) -> List[str]:
+    def render(self, width: int) -> List[str]:
         """Render the progress bar to a string"""
         bar = self.get_bar()
         if bar is None:
             return []
 
-        if self._should_update_internal(available_width) or available_width not in self._render_cache:
-            self._render_cache[available_width] = self._render_internal(bar, available_width)
-            self.last_update_for_width[available_width]['progress'] = bar.progress
-            self.last_update_for_width[available_width]['time'] = time.time()
+        if self._should_update_internal(width) or width not in self._render_cache:
+            self._render_cache[width] = self._render_internal(bar, width)
+            self.last_update_for_width[width]['progress'] = bar.progress
+            self.last_update_for_width[width]['time'] = time.time()
 
         # Update timestamps
         self.last_update_time = time.time()
         self.prev_progress = bar.progress
         self._last_item = bar._item
 
-        rendered = self._render_cache[available_width]
+        rendered = self._render_cache[width]
 
         return rendered
 
-    def _render_internal(self, bar: Bar, available_width: int) -> List[str]:
+    def _render_internal(self, bar: Bar, width: int) -> List[str]:
         """Render the progress bar to a string"""
-        # Render: first pass
-        fixed_width = 0
-        bar_widget_min_width = 5
-        expandable_widget_idx = None
-        rendered_widgets = []
+        rendered_widgets = [('', '')] * len(self.widgets)
 
-        widget_count_without_bar = sum(1 for w in self.widgets if not isinstance(w, BarWidget))
         num_spaces = len(self.widgets) - 1
-        widget_available_width = max(0, available_width - bar_widget_min_width - bar.indent - num_spaces) // max(1, widget_count_without_bar)
-
-        context = {
-            'item': bar._item,
-            'available_width': widget_available_width
-        }
-
-        for idx, widget in enumerate(self.widgets):
-            if isinstance(widget, BarWidget):
-                expandable_widget_idx = idx
-                rendered_widgets.append(None)
-            else:
-                rendered = widget.render(bar, context)
-                rendered_widgets.append(rendered)
-                fixed_width += len(rendered[0])
-
-        # Some widgets may require less space then widget_available_width, so re-render them with leftover space
-
+        available_width = max(0, width - bar.indent - num_spaces)
         widgets_by_priority = sorted(enumerate(self.widgets), key=lambda x: x[1].render_priority)
-        second_pass_widget_indexes = []
 
-        for idx, _ in widgets_by_priority:
-            rendered = rendered_widgets[idx]
-            if rendered is None or len(rendered[0]) < widget_available_width:
+        bar_widget_idx = None
+        for idx, widget in widgets_by_priority:
+            if isinstance(widget, BarWidget):
+                bar_widget_idx = idx
                 continue
-            second_pass_widget_indexes.append(idx)
-            fixed_width -= len(rendered[0])
-
-        widget_available_width = max(0, available_width - bar_widget_min_width - bar.indent - num_spaces - fixed_width)
-
-        for idx in second_pass_widget_indexes:
-            widget = self.widgets[idx]
-            context['available_width'] = widget_available_width
-            rendered = widget.render(bar, context)
+            rendered = widget.render(bar, available_width)
             rendered_widgets[idx] = rendered
-            fixed_width += len(rendered[0])
-            widget_available_width = max(0, widget_available_width - len(rendered[0]))
+            available_width = max(0, available_width - len(rendered[0]))
 
-        # Calculate available width for bar
+        if bar_widget_idx is not None:
+            bar_widget = self.widgets[bar_widget_idx]
+            rendered = bar_widget.render(bar, available_width)
+            rendered_widgets[bar_widget_idx] = rendered
+            available_width = max(0, available_width - len(rendered[0]))
 
-        if expandable_widget_idx is not None:
-            bar_width = available_width - fixed_width - bar.indent - num_spaces
-            context['available_width'] = bar_width
-            bar_widget = self.widgets[expandable_widget_idx]
-            rendered_widgets[expandable_widget_idx] = bar_widget.render(bar, context)
-
-        # Render: second pass
         parts = [w[1] for w in rendered_widgets if w and w[0]]
         if not parts:
-            return [' ' * available_width]
+            return [' ' * width]
 
         indent_str = ' ' * bar.indent
         rendered = indent_str + ' '.join(parts)
-        width = sum(len(w[0]) for w in rendered_widgets if w) + len(indent_str) + (len(parts) - 1)
-        padding = ' ' * (available_width - width) if available_width > width else ''
+        rendered_width = sum(len(w[0]) for w in rendered_widgets if w) + len(indent_str) + (len(parts) - 1)
+        padding = ' ' * (width - rendered_width) if width > rendered_width else ''
 
         return [rendered + padding]
 

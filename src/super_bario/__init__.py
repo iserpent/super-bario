@@ -1027,15 +1027,15 @@ class View:
                 continue
             rendered = widget.render(bar, available_width)
             rendered_widgets[idx] = rendered
-            available_width = max(0, available_width - len(rendered[0]))
+            rendered_width = len(rendered[0])
+            available_width = max(0, available_width - rendered_width)
 
         if bar_widget_idx is not None:
             bar_widget = self.widgets[bar_widget_idx]
             rendered = bar_widget.render(bar, available_width)
             rendered_widgets[bar_widget_idx] = rendered
-            available_width = max(0, available_width - len(rendered[0]))
 
-        parts = [w[1] for w in rendered_widgets if w and w[0]]
+        parts = [w[1] for w in rendered_widgets if w]
         if not parts:
             return [' ' * width]
 

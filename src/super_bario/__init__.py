@@ -1514,7 +1514,7 @@ class _ProgressController:
         for layout in layouts:
             _layout = self._registered_layouts.get(layout)
             if _layout is None:
-                raise ValueError(f"Layout '{layout}' is not registered")
+                continue
 
             views_in_layout = set()
             if bar in self._view_usage:
@@ -1707,7 +1707,6 @@ class _ProgressController:
     def _add_layout_internal(self, name: str, parents: List[str]):
         """Internal method to add layout without locking"""
         _layout = self._registered_layouts.get(name)
-
         if _layout is None:
             raise ValueError(f"Layout '{name}' does not exist. It must be created before it can be used.")
 
@@ -1748,13 +1747,10 @@ class _ProgressController:
 
     def remove_layout(self, name: str, parents: Optional[List[str]] = None):
         """Remove a layout configuration"""
-        if parents is None:
-            parents = [_DEFAULT_LAYOUT_NAME]
-
         with self.lock():
             self._remove_layout_internal(name, parents)
 
-    def _remove_layout_internal(self, name: str, parents: List[str]):
+    def _remove_layout_internal(self, name: str, parents: Optional[List[str]]):
         """Remove a layout configuration"""
         if name == _DEFAULT_LAYOUT_NAME:
             raise ValueError("Cannot remove default layout")
@@ -1763,13 +1759,13 @@ class _ProgressController:
         if _layout is None:
             raise ValueError(f"Layout '{name}' does not exist.")
 
+        if not parents:
+            parents = list(self._registered_layouts.keys())
+
         for parent in parents:
             _parent = self._registered_layouts.get(parent)
             if _parent is None:
                 raise ValueError(f"Parent layout '{parent}' does not exist.")
-
-            if _layout not in _parent:
-                raise ValueError(f"Layout '{name}' is not part of parent layout '{parent}'")
 
             _parent.remove(_layout)
 

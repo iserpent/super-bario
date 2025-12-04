@@ -1498,9 +1498,6 @@ class _ProgressController:
 
     def remove_bar(self, bar: Bar, layouts: Optional[List[str]] = None):
         """Remove a progress bar from the controller"""
-        if layouts is None:
-            layouts = [_DEFAULT_LAYOUT_NAME]
-
         with self.lock():
             self._remove_bar_internal(bar, layouts)
 
@@ -1525,12 +1522,13 @@ class _ProgressController:
                     if view in _layout:
                         views_in_layout.add(view)
 
-            if not views_in_layout:
-                if bar not in self._view_usage:
-                    raise ValueError("Bar is not registered with the controller")
-                raise ValueError(f"Bar is not part of layout '{layout}'")
+            if not views_in_layout or bar not in self._view_usage:
+                continue
 
             for view in views_in_layout:
+                if bar not in self._view_usage:
+                    continue
+
                 _layout.remove(view)
 
                 bar_view_usage = self._view_usage[bar]
@@ -2296,8 +2294,6 @@ class ProgressContext:
                  bar: Optional[Bar] = None,
                  layouts: Optional[List[str]] = None,
                  **kwargs):
-        self.layouts = [_DEFAULT_LAYOUT_NAME] if layouts is None else layouts
-
         if bar is not None:
             self.bar = bar
             self.bar.total = total
@@ -2315,7 +2311,7 @@ class ProgressContext:
         controller.display()
 
         if self.bar.remove_on_complete:
-            controller.remove_bar(self.bar, layouts=self.layouts)
+            controller.remove_bar(self.bar)
             controller.display(force_update=True)
 
         return False

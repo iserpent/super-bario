@@ -513,7 +513,7 @@ class TimeWidget(Widget):
 
 class CounterWidget(Widget):
     """Widget displaying current/total count"""
-    _render_priority = 20
+    _render_priority = 30
 
     def __init__(self, theme: Optional[Theme] = None):
         self.reset(theme=theme)
@@ -1018,22 +1018,14 @@ class View:
 
         num_spaces = len(self.widgets) - 1
         available_width = max(0, width - bar.indent - num_spaces)
+
         widgets_by_priority = sorted(enumerate(self.widgets), key=lambda x: x[1].render_priority)
 
-        bar_widget_idx = None
         for idx, widget in widgets_by_priority:
-            if isinstance(widget, BarWidget):
-                bar_widget_idx = idx
-                continue
             rendered = widget.render(bar, available_width)
             rendered_widgets[idx] = rendered
             rendered_width = len(rendered[0])
             available_width = max(0, available_width - rendered_width)
-
-        if bar_widget_idx is not None:
-            bar_widget = self.widgets[bar_widget_idx]
-            rendered = bar_widget.render(bar, available_width)
-            rendered_widgets[bar_widget_idx] = rendered
 
         parts = [w[1] for w in rendered_widgets if w]
         if not parts:

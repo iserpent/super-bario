@@ -244,12 +244,19 @@ class Widget(ABC):
         """Render priority for widget ordering (lower is rendered first)"""
         return self._render_priority
 
-    def reset(self, *args, theme: Optional[Theme] = None, **kwargs):
+    def reset(self, *args, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None, **kwargs):
         """Reset any internal state"""
         if theme is not None:
             self.theme = theme
         elif not hasattr(self, 'theme'):
             self.theme = Theme.default()
+
+        # Auto-detect unicode support if not specified
+        if use_unicode is None:
+            capability = _detect_terminal_capability()
+            use_unicode = capability in [TerminalCapability.BASIC, TerminalCapability.ADVANCED]
+
+        self.use_unicode = use_unicode
 
     @abstractmethod
     def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
@@ -264,21 +271,27 @@ class Widget(ABC):
         if len(text) <= width:
             return text
 
-        text = text[:max(0, width-3)]
-        return text + '.' * (width - len(text))
+        if self.use_unicode:
+            text = text[:max(0, width-1)]
+            text += '…'
+        else:
+            text = text[:max(0, width-3)]
+            text += '.' * (width - len(text))
+
+        return text
 
 
 class TitleWidget(Widget):
     """Widget displaying the title/description"""
     _render_priority = 40
 
-    def __init__(self, title: Union[str, Callable[[Any], str]] = "Progress", theme: Optional[Theme] = None):
+    def __init__(self, title: Union[str, Callable[[Any], str]] = "Progress", theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
         self.title_fn: Optional[Callable[[Any], str]] = None
         self._width = 0
-        self.reset(title=title, theme=theme)
+        self.reset(title=title, theme=theme, use_unicode=use_unicode)
 
-    def reset(self, title: Union[str, Callable[[Any], str], None] = None, theme: Optional[Theme] = None):
-        super().reset(theme=theme)
+    def reset(self, title: Union[str, Callable[[Any], str], None] = None, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
+        super().reset(theme=theme, use_unicode=use_unicode)
         if title is not None:
             if callable(title):
                 self.title_fn = title
@@ -328,16 +341,9 @@ class BarWidget(Widget):
               char_complete: Optional[str] = None,
               char_incomplete: Optional[str] = None,
               block_fractions: Optional[List[str]] = None):
-        super().reset(theme=theme)
+        super().reset(theme=theme, use_unicode=use_unicode)
 
-        # Auto-detect unicode support if not specified
-        if use_unicode is None:
-            capability = _detect_terminal_capability()
-            use_unicode = capability in [TerminalCapability.BASIC, TerminalCapability.ADVANCED]
-
-        self.use_unicode = use_unicode
-
-        if use_unicode:
+        if self.use_unicode:
             self.char_start_bracket = '▕'
             self.char_end_bracket = '▏'
             self.char_complete = '█'
@@ -457,8 +463,8 @@ class PercentageWidget(Widget):
     """Widget displaying percentage"""
     _render_priority = 10
 
-    def __init__(self, theme: Optional[Theme] = None):
-        self.reset(theme=theme)
+    def __init__(self, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
+        self.reset(theme=theme, use_unicode=use_unicode)
 
     def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
         prepared = '{:>2.0%}'.format(bar.progress)
@@ -471,16 +477,17 @@ class TimeWidget(Widget):
     """Widget displaying time information"""
     _render_priority = 20
 
-    def __init__(self, show_eta: bool = True, show_elapsed: bool = True, theme: Optional[Theme] = None):
+    def __init__(self, show_eta: bool = True, show_elapsed: bool = True, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
         self.show_eta = show_eta
         self.show_elapsed = show_elapsed
-        self.reset(show_eta=show_eta, show_elapsed=show_elapsed, theme=theme)
+        self.reset(show_eta=show_eta, show_elapsed=show_elapsed, theme=theme, use_unicode=use_unicode)
 
     def reset(self,
               show_eta: Optional[bool] = None,
               show_elapsed: Optional[bool] = None,
-              theme: Optional[Theme] = None):
-        super().reset(theme=theme)
+              theme: Optional[Theme] = None,
+              use_unicode: Optional[bool] = None):
+        super().reset(theme=theme, use_unicode=use_unicode)
         if show_eta is not None:
             self.show_eta = show_eta
         if show_elapsed is not None:
@@ -515,8 +522,8 @@ class CounterWidget(Widget):
     """Widget displaying current/total count"""
     _render_priority = 30
 
-    def __init__(self, theme: Optional[Theme] = None):
-        self.reset(theme=theme)
+    def __init__(self, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
+        self.reset(theme=theme, use_unicode=use_unicode)
 
     def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
         if bar.total > 0:
@@ -541,10 +548,10 @@ class SpinnerWidget(Widget):
 
     def __init__(self,
                  style: str = 'dots',
-                 use_unicode: Optional[bool] = None,
-                 theme: Optional[Theme] = None):
+                 theme: Optional[Theme] = None,
+                 use_unicode: Optional[bool] = None):
         self._lock = threading.Lock()
-        self.reset(style=style, use_unicode=use_unicode, theme=theme)
+        self.reset(style=style, theme=theme, use_unicode=use_unicode)
 
     def reset(self,
               style: str = 'dots',
@@ -585,12 +592,12 @@ class RateWidget(Widget):
     """Widget displaying processing rate"""
     _render_priority = 40
 
-    def __init__(self, theme: Optional[Theme] = None):
+    def __init__(self, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
         self._lock = threading.Lock()
-        self.reset(theme=theme)
+        self.reset(theme=theme, use_unicode=use_unicode)
 
-    def reset(self, theme: Optional[Theme] = None):
-        super().reset(theme=theme)
+    def reset(self, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
+        super().reset(theme=theme, use_unicode=use_unicode)
         self.last_time = None
         self.last_count = 0
         self.current_rate = 0.0
@@ -913,20 +920,20 @@ class View:
             total = bar.total
 
         if title is not None and TitleWidget not in exclude_widgets:
-            widgets.extend(filter(include_widget, [TitleWidget(title=title, theme=self.theme)]))
+            widgets.extend(filter(include_widget, [TitleWidget(title=title, theme=self.theme, use_unicode=self.use_unicode)]))
 
         if total > 0:
             widgets.extend(filter(include_widget, [
                 BarWidget(theme=self.theme, use_unicode=self.use_unicode),
-                PercentageWidget(theme=self.theme),
-                CounterWidget(theme=self.theme),
-                TimeWidget(theme=self.theme)
+                PercentageWidget(theme=self.theme, use_unicode=self.use_unicode),
+                CounterWidget(theme=self.theme, use_unicode=self.use_unicode),
+                TimeWidget(theme=self.theme, use_unicode=self.use_unicode)
             ]))
         else:
             widgets.extend(filter(include_widget, [
                 SpinnerWidget(theme=self.theme, use_unicode=self.use_unicode),
-                CounterWidget(theme=self.theme),
-                TimeWidget(show_eta=False, theme=self.theme)
+                CounterWidget(theme=self.theme, use_unicode=self.use_unicode),
+                TimeWidget(show_eta=False, theme=self.theme, use_unicode=self.use_unicode)
             ]))
 
         return widgets
@@ -1575,12 +1582,14 @@ class _ProgressController:
         title_widget_args = [
             "title",
             "theme",
+            "use_unicode",
         ]
         title_widget_config = {key: kwargs[key] for key in title_widget_args if key in kwargs}
 
         bar_widget_args = [
             "use_unicode",
             "theme",
+            "use_unicode",
             "char_start_bracket",
             "char_end_bracket",
             "char_complete",
@@ -1591,17 +1600,21 @@ class _ProgressController:
 
         percentage_widget_args = [
             "theme",
+            "use_unicode",
         ]
         percentage_widget_config = {key: kwargs[key] for key in percentage_widget_args if key in kwargs}
 
         counter_widget_args = [
             "theme",
+            "use_unicode",
         ]
         counter_widget_config = {key: kwargs[key] for key in counter_widget_args if key in kwargs}
 
         time_widget_args = [
             "show_eta",
             "show_elapsed",
+            "theme",
+            "use_unicode",
         ]
         time_widget_config = {key: kwargs[key] for key in time_widget_args if key in kwargs}
 

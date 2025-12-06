@@ -1021,13 +1021,33 @@ class View:
 
         widgets_by_priority = sorted(enumerate(self.widgets), key=lambda x: x[1].render_priority)
 
+        empty_widget_indexes = []
+
         for idx, widget in widgets_by_priority:
             rendered = widget.render(bar, available_width)
             rendered_widgets[idx] = rendered
             rendered_width = len(rendered[0])
+            if rendered_width == 0:
+                empty_widget_indexes.append(idx)
             available_width = max(0, available_width - rendered_width)
 
-        parts = [w[1] for w in rendered_widgets if w]
+        ignore_widget_indexes = set()
+
+        while empty_widget_indexes:
+            empty_idx = empty_widget_indexes.pop()
+            ignore_widget_indexes.add(empty_idx)
+            num_spaces -= 1
+            available_width = max(0, width - bar.indent - num_spaces)
+
+            for idx, widget in widgets_by_priority:
+                if idx in ignore_widget_indexes:
+                    continue
+                rendered = widget.render(bar, available_width)
+                rendered_widgets[idx] = rendered
+                rendered_width = len(rendered[0])
+                available_width = max(0, available_width - rendered_width)
+
+        parts = [w[1] for w in rendered_widgets if w and w[0]]
         if not parts:
             return [' ' * width]
 
@@ -1109,20 +1129,16 @@ class _ProgressController:
                     rendered_lines = component.render(available_width)
                     lines.extend(rendered_lines)
             elif len(self) > 0:  # ROW
-                min_total_width = len(self) * 2 - 1
-                if available_width < min_total_width:
-                    component_widths = [1] * len(self)
-                else:
-                    approx_component_available_width = (available_width // len(self)) - 1
-                    component_widths = [approx_component_available_width] * len(self)
-                    leftover = available_width - (approx_component_available_width * len(self)) - len(self) + 1
+                approx_component_available_width = (available_width // len(self)) - 1
+                component_widths = [approx_component_available_width] * len(self)
+                leftover = available_width - (approx_component_available_width * len(self)) - len(self) + 1
 
-                    while leftover > 0:
-                        for i in range(len(component_widths)):
-                            component_widths[i] += 1
-                            leftover -= 1
-                            if leftover == 0:
-                                break
+                while leftover > 0:
+                    for i in range(len(component_widths)):
+                        component_widths[i] += 1
+                        leftover -= 1
+                        if leftover == 0:
+                            break
 
                 rendered_components = []
                 for idx, component in enumerate(self):

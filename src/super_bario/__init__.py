@@ -1028,31 +1028,36 @@ class View:
 
         widgets_by_priority = sorted(enumerate(self.widgets), key=lambda x: x[1].render_priority)
 
-        empty_widget_indexes = []
+        last_empty_widget_index = None
 
         for idx, widget in widgets_by_priority:
             rendered = widget.render(bar, available_width)
             rendered_widgets[idx] = rendered
             rendered_width = len(rendered[0])
             if rendered_width == 0:
-                empty_widget_indexes.append(idx)
+                last_empty_widget_index = idx
             available_width = max(0, available_width - rendered_width)
 
-        ignore_widget_indexes = set()
+        all_widgets_empty = False
+        empty_widget_indexes = set()
 
-        while empty_widget_indexes:
-            empty_idx = empty_widget_indexes.pop()
-            ignore_widget_indexes.add(empty_idx)
-            num_spaces -= 1
+        while last_empty_widget_index is not None and not all_widgets_empty:
+            empty_widget_indexes.add(last_empty_widget_index)
+            num_spaces = len([r for r in rendered_widgets if r and len(r[0]) > 0]) - 1
             available_width = max(0, width - bar.indent - num_spaces)
+            last_empty_widget_index = None
 
             for idx, widget in widgets_by_priority:
-                if idx in ignore_widget_indexes:
+                if idx in empty_widget_indexes:
                     continue
                 rendered = widget.render(bar, available_width)
                 rendered_widgets[idx] = rendered
                 rendered_width = len(rendered[0])
+                if rendered_width == 0:
+                    last_empty_widget_index = idx
                 available_width = max(0, available_width - rendered_width)
+
+            all_widgets_empty = all(len(r[0]) == 0 for r in rendered_widgets)
 
         parts = [w[1] for w in rendered_widgets if w and w[0]]
         if not parts:

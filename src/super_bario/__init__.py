@@ -1022,28 +1022,14 @@ class View:
     def _render_internal(self, bar: Bar, width: int) -> List[str]:
         """Render the progress bar to a string"""
         rendered_widgets = [('', '')] * len(self.widgets)
-
         num_spaces = len(self.widgets) - 1
-        available_width = max(0, width - bar.indent - num_spaces)
+        all_widgets_empty = False
+        empty_widget_indexes = set()
+        initial_run = True
 
         widgets_by_priority = sorted(enumerate(self.widgets), key=lambda x: x[1].render_priority)
 
-        last_empty_widget_index = None
-
-        for idx, widget in widgets_by_priority:
-            rendered = widget.render(bar, available_width)
-            rendered_widgets[idx] = rendered
-            rendered_width = len(rendered[0])
-            if rendered_width == 0:
-                last_empty_widget_index = idx
-            available_width = max(0, available_width - rendered_width)
-
-        all_widgets_empty = False
-        empty_widget_indexes = set()
-
-        while last_empty_widget_index is not None and not all_widgets_empty:
-            empty_widget_indexes.add(last_empty_widget_index)
-            num_spaces = len([r for r in rendered_widgets if r and len(r[0]) > 0]) - 1
+        while not all_widgets_empty:
             available_width = max(0, width - bar.indent - num_spaces)
             last_empty_widget_index = None
 
@@ -1057,7 +1043,18 @@ class View:
                     last_empty_widget_index = idx
                 available_width = max(0, available_width - rendered_width)
 
-            all_widgets_empty = all(len(r[0]) == 0 for r in rendered_widgets)
+            if last_empty_widget_index is None:
+                break
+
+            empty_widget_indexes.add(last_empty_widget_index)
+            num_spaces = max(0, len(self.widgets) - len(empty_widget_indexes) - 1)
+            all_widgets_empty = len(self.widgets) == len(empty_widget_indexes)
+
+            if initial_run:
+                initial_run = False
+                # If first pass results in all widgets empty, we still give it another try
+                # to render with retained available width from spaces between widgets
+                all_widgets_empty = False
 
         parts = [w[1] for w in rendered_widgets if w and w[0]]
         if not parts:

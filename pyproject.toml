@@ -29,9 +29,6 @@ classifiers = [
 
 dependencies = []
 
-[project.optional-dependencies]
-tests = ["pytest>=7"]
-
 [project.urls]
 Homepage = "https://github.com/iserpent/super-bario"
 Source = "https://github.com/iserpent/super-bario"
@@ -47,3 +44,8 @@ include = ["super_bario*"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]

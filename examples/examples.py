@@ -19,6 +19,10 @@ def example_0():
         for i in progress(range(1, 80 + 1), title=lambda item: f"Task {layouts} - Item {item.value}", theme=theme, layouts=layouts, indent=indent, remove_on_complete=remove_on_complete):
             time.sleep(0.1)
 
+    def custom_bar_worker(bar):
+        for i in progress(range(1, 80 + 1), bar=bar):
+            time.sleep(0.1)
+
     def sub_worker(layouts):
         for i in progress(range(1, 2 + 1), title=lambda item: f"Processing i: {item.value}", layouts=layouts):
             for j in progress(range(1, 10 + 1), title=lambda item: f"Processing j: {item.value}", indent=1, layouts=layouts, remove_on_complete=True):
@@ -59,6 +63,7 @@ def example_0():
     Progress.add_layout("h_layout3", parents=["v_layout2_4"])
 
     threads = []
+
     themes = [
         (Theme.default(), ["v_layout1_1"], 0, False),
         (Theme.matrix(), ["v_layout2_1"], 1, True),
@@ -78,6 +83,41 @@ def example_0():
     ]
     for args in themes:
         t = threading.Thread(target=worker, args=args)
+        threads.append(t)
+
+    bar = Progress.add_custom_bar(
+        total=500,
+        title=f"Custom fractions",
+        indent=0,
+        remove_on_complete=False,
+        char_start_bracket="",
+        char_end_bracket="",
+        char_complete='⣿',
+        char_incomplete=' ',
+        block_fractions=['⣀', '⣄', '⣆', '⣇', '⣧', '⣷', '⣿'],
+        layouts=["v_layout1_3"],
+    )
+
+    t = threading.Thread(target=custom_bar_worker, args=(bar,))
+    threads.append(t)
+
+    complete_chars = ['━', '▰', '▪', '⣿']
+    incomplete_chars = [' ', '▱', '▫', ' ']
+    for idx, theme in enumerate([Theme.default(), Theme.minimal(), Theme.matrix(), Theme.fire(), Theme.load()]):
+        bar = Progress.add_custom_bar(
+                total=80,
+                title=f"Custom Bar {idx}",
+                theme=theme,
+                layouts=["v_layout1_3"],
+                indent=0,
+                remove_on_complete=False,
+                char_start_bracket="",
+                char_end_bracket="",
+                char_complete=complete_chars[idx % len(complete_chars)],
+                char_incomplete=incomplete_chars[idx % len(incomplete_chars)],
+                block_fractions=[],
+                )
+        t = threading.Thread(target=custom_bar_worker, args=(bar,))
         threads.append(t)
 
     threads.append(threading.Thread(target=sub_worker, args=(["v_layout1_2", "v_layout2_2", "v_layout3_2"],)))

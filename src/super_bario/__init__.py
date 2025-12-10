@@ -1648,7 +1648,7 @@ class _ProgressController:
 
         view = View(**view_config)
 
-        self.add_bar(bar, view, layouts=kwargs.pop("layouts"))
+        self.add_bar(bar, view, layouts=kwargs.get("layouts", None))
 
         return bar
 

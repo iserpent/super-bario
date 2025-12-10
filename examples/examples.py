@@ -90,28 +90,12 @@ def example_0():
         title=f"Custom fractions",
         indent=0,
         remove_on_complete=False,
-        char_start_bracket="",
-        char_end_bracket="",
+        layouts=["v_layout1_3"],
+        char_start_incomplete="",
+        char_end_incomplete="",
+        char_incomplete=' ',
         char_complete='⣿',
-        char_incomplete=' ',
-        block_fractions=['⣀', '⣄', '⣆', '⣇', '⣧', '⣷', '⣿'],
-        layouts=["v_layout1_3"],
-    )
-
-    t = threading.Thread(target=custom_bar_worker, args=(bar,))
-    threads.append(t)
-
-    bar = Progress.add_custom_bar(
-        total=80,
-        title=f"Custom icons",
-        indent=0,
-        remove_on_complete=False,
-        char_start_bracket="🏹",
-        char_end_bracket="🎯",
-        char_complete='⇢',
-        char_incomplete=' ',
-        block_fractions=[],
-        layouts=["v_layout1_3"],
+        char_complete_fractions=['⣀', '⣄', '⣆', '⣇', '⣧', '⣷', '⣿'],
     )
 
     t = threading.Thread(target=custom_bar_worker, args=(bar,))
@@ -127,11 +111,11 @@ def example_0():
                 layouts=["v_layout1_3"],
                 indent=0,
                 remove_on_complete=False,
-                char_start_bracket="",
-                char_end_bracket="",
-                char_complete=complete_chars[idx % len(complete_chars)],
+                char_start_incomplete="",
+                char_end_incomplete="",
                 char_incomplete=incomplete_chars[idx % len(incomplete_chars)],
-                block_fractions=[],
+                char_complete=complete_chars[idx % len(complete_chars)],
+                char_complete_fractions=[],
                 )
         t = threading.Thread(target=custom_bar_worker, args=(bar,))
         threads.append(t)
@@ -161,7 +145,55 @@ def example_1():
 
 
 def example_2():
-    print("=== Example 2: Watch Qeueus ===")
+    print("=== Example 2: Custom Icons ===")
+
+    # Enable force redraw to properly display custom icons: unicode characters may have different widths,
+    # and soft redraws may not handle them correctly.
+    Progress.force_redraw = True
+
+    bars = []
+    bar = Progress.add_custom_bar(
+        total=80,
+        title=f"Custom icons",
+        indent=0,
+        remove_on_complete=False,
+        char_start_incomplete="🏹",
+        char_start_complete="🏅",
+        char_end_incomplete="",
+        char_end_complete="🎯",
+        char_incomplete=' ',
+        char_complete=' ',
+        char_complete_fractions=['➳'],
+    )
+
+    bars.append(bar)
+
+    bar = Progress.add_custom_bar(
+        total=80,
+        title=f"Custom icons",
+        indent=0,
+        remove_on_complete=False,
+        char_start_incomplete="🏃",
+        char_end_incomplete="🥅",
+        char_end_complete="🏆",
+        char_incomplete=' ',
+        char_complete=' ',
+        char_complete_fractions=['⚽'],
+    )
+
+    bars.append(bar)
+
+    for i in range(1, 80 + 1):
+        for bar in bars:
+            bar.increment()
+        Progress.display()
+        time.sleep(0.05)
+
+    Progress.close()
+
+
+def example_3():
+    print("=== Example 3: Watch Qeueus ===")
     from queue import Queue
 
     q1 = Queue(maxsize=1000)
@@ -202,32 +234,32 @@ def example_2():
     Progress.close()
 
 
-def example_3():
-    print("=== Example 3: Minimal Theme ===")
+def example_4():
+    print("=== Example 4: Minimal Theme ===")
 
     with Progress:  # another way to manage Progress lifecycle
         for i in progress(range(1, 100 + 1), title="Processing items", theme=Theme.minimal()):
             time.sleep(0.02)
 
 
-def example_4():
-    print("=== Example 4: Text only ===")
+def example_5():
+    print("=== Example 5: Text only ===")
 
     with Progress:
         for i in progress(range(1, 100 + 1), title="Processing items", use_unicode=False):
             time.sleep(0.02)
 
 
-def example_5():
-    print("=== Example 5: Matrix Theme ===")
+def example_6():
+    print("=== Example 6: Matrix Theme ===")
 
     with Progress:
         for i in progress(range(1, 100 + 1), title="Processing items", theme=Theme.matrix()):
             time.sleep(0.02)
 
 
-def example_6():
-    print("=== Example 6: Fire Gradient ===")
+def example_7():
+    print("=== Example 7: Fire Gradient ===")
 
     bar = Bar(total=100, title="Heating up")
     view = View(bar, theme=Theme.fire())
@@ -241,8 +273,8 @@ def example_6():
     Progress.close()
 
 
-def example_7():
-    print("=== Example 7: Load Gradient ===")
+def example_8():
+    print("=== Example 8: Load Gradient ===")
 
     bar = Bar(total=100, title="Load")
     view = View(bar, theme=Theme.load())
@@ -256,8 +288,8 @@ def example_7():
     Progress.close()
 
 
-def example_8():
-    print("=== Example 8: Custom theme ===")
+def example_9():
+    print("=== Example 9: Custom theme ===")
 
     # Custom gradient theme
     custom_gradient = Theme(
@@ -281,8 +313,8 @@ def example_8():
     Progress.close()
 
 
-def example_9():
-    print("=== Example 9: Custom Widgets with Rate ===")
+def example_10():
+    print("=== Example 10: Custom Widgets with Rate ===")
 
     widgets = [
         TitleWidget("Download", theme=Theme.default()),
@@ -315,10 +347,11 @@ def example_10():
     Progress.instance().close()
 
 
-def example_11():
-    print("=== Example 11: Spinner Styles ===")
+def example_12():
+    print("=== Example 12: Spinner Styles ===")
 
     with Progress:
+        bars = []
         for spinner_style, use_unicode in [('snake', True), ('dots', True), ('arrows', True), ('bouncing', True), ('spinner', False)]:
             widgets = [
                 TitleWidget(f"Loading ({spinner_style})", theme=Theme.default()),
@@ -328,11 +361,23 @@ def example_11():
             ]
 
             bar = Progress.create_bar(total=0, widgets=widgets)
+            bars.append(bar)
 
-            for i in range(1, 30 + 1):
+        widgets = [
+            TitleWidget(f"Loading (planet)", theme=Theme.default()),
+            SpinnerWidget(frames=['🌍', '🌎', '🌏'], theme=Theme.default()),
+            CounterWidget(theme=Theme.default()),
+            TimeWidget(show_eta=False, theme=Theme.default())
+        ]
+
+        bar = Progress.create_bar(total=0, widgets=widgets)
+        bars.append(bar)
+
+        for i in range(1, 50 + 1):
+            for bar in bars:
                 bar.increment()
-                Progress.display()
-                time.sleep(0.05)
+            time.sleep(0.2)
+            Progress.display()
 
 
 if __name__ == '__main__':
@@ -340,7 +385,7 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
 
-    for i in range(0, 11 + 1):
+    for i in range(0, 12 + 1):
         if i != 0:
             time.sleep(1)
         globals()[f"example_{i}"]()

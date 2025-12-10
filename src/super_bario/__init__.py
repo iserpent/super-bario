@@ -15,6 +15,7 @@ import threading
 import weakref
 import select
 import fcntl
+import math
 from weakref import ReferenceType, WeakSet, WeakKeyDictionary
 from collections import defaultdict
 from collections.abc import MutableSequence
@@ -320,52 +321,87 @@ class BarWidget(Widget):
     def __init__(self,
                  use_unicode: Optional[bool] = None,
                  theme: Optional[Theme] = None,
-                 char_start_bracket: Optional[str] = None,
-                 char_end_bracket: Optional[str] = None,
-                 char_complete: Optional[str] = None,
+                 char_start_incomplete: Optional[str] = None,
+                 char_start_progress: Optional[str] = None,
+                 char_start_complete: Optional[str] = None,
+                 char_end_incomplete: Optional[str] = None,
+                 char_end_progress: Optional[str] = None,
+                 char_end_complete: Optional[str] = None,
                  char_incomplete: Optional[str] = None,
-                 block_fractions: Optional[List[str]] = None):
+                 char_complete: Optional[str] = None,
+                 char_complete_fractions: Optional[List[str]] = None):
         self.reset(use_unicode=use_unicode,
                    theme=theme,
-                   char_start_bracket=char_start_bracket,
-                   char_end_bracket=char_end_bracket,
-                   char_complete=char_complete,
+                   char_start_incomplete=char_start_incomplete,
+                   char_start_progress=char_start_progress,
+                   char_start_complete=char_start_complete,
+                   char_end_incomplete=char_end_incomplete,
+                   char_end_progress=char_end_progress,
+                   char_end_complete=char_end_complete,
                    char_incomplete=char_incomplete,
-                   block_fractions=block_fractions)
+                   char_complete=char_complete,
+                   char_complete_fractions=char_complete_fractions)
 
     def reset(self,
               use_unicode: Optional[bool] = None,
               theme: Optional[Theme] = None,
-              char_start_bracket: Optional[str] = None,
-              char_end_bracket: Optional[str] = None,
-              char_complete: Optional[str] = None,
+              char_start_incomplete: Optional[str] = None,
+              char_start_progress: Optional[str] = None,
+              char_start_complete: Optional[str] = None,
+              char_end_incomplete: Optional[str] = None,
+              char_end_progress: Optional[str] = None,
+              char_end_complete: Optional[str] = None,
               char_incomplete: Optional[str] = None,
-              block_fractions: Optional[List[str]] = None):
+              char_complete: Optional[str] = None,
+              char_complete_fractions: Optional[List[str]] = None):
         super().reset(theme=theme, use_unicode=use_unicode)
 
         if self.use_unicode:
-            self.char_start_bracket = '▕'
-            self.char_end_bracket = '▏'
+            self.char_start_incomplete = '▕'
+            self.char_end_incomplete = '▏'
+            self.char_incomplete = ' '
             self.char_complete = '█'
-            self.char_incomplete = ' '
-            self.block_fractions = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█']
+            self.char_complete_fractions = ['▏', '▎', '▍', '▌', '▋', '▊', '▉', '█']
         else:
-            self.char_start_bracket = '['
-            self.char_end_bracket = ']'
-            self.char_complete = '#'
+            self.char_start_incomplete = '['
+            self.char_end_incomplete = ']'
             self.char_incomplete = ' '
-            self.block_fractions = ['#']
+            self.char_complete = '#'
+            self.char_complete_fractions = ['#']
 
-        if char_start_bracket is not None:
-            self.char_start_bracket = char_start_bracket
-        if char_end_bracket is not None:
-            self.char_end_bracket = char_end_bracket
-        if char_complete is not None:
-            self.char_complete = char_complete
+        if char_start_incomplete is not None:
+            self.char_start_incomplete = char_start_incomplete
+
+        if char_end_incomplete is not None:
+            self.char_end_incomplete = char_end_incomplete
+
+        self.char_start_progress = self.char_start_incomplete
+        self.char_end_progress = self.char_end_incomplete
+        self.char_start_complete = self.char_start_incomplete
+        self.char_end_complete = self.char_end_incomplete
+
+        if char_start_progress is not None:
+            self.char_start_progress = char_start_progress
+
+        if char_end_progress is not None:
+            self.char_end_progress = char_end_progress
+
+        if char_start_complete is not None:
+            self.char_start_complete = char_start_complete
+
+        if char_end_complete is not None:
+            self.char_end_complete = char_end_complete
+
         if char_incomplete is not None:
             self.char_incomplete = char_incomplete
-        if block_fractions is not None:
-            self.block_fractions = block_fractions
+
+        if char_complete is not None:
+            self.char_complete = char_complete
+
+        if char_complete_fractions is not None:
+            self.char_complete_fractions = char_complete_fractions
+
+        self.char_complete_fractions.insert(0, '')  # Add empty string for zero progress
 
     def _recalculate_trimmed_parts(self,
                                    width: int,
@@ -373,7 +409,7 @@ class BarWidget(Widget):
                                    trimmed_content: str,
                                    complete_part: str,
                                    incomplete_part: str):
-        trimmed_width = len(trimmed_content) - len(self.char_start_bracket) - len(self.char_end_bracket)
+        trimmed_width = len(trimmed_content) - len(self.char_start_incomplete) - len(self.char_end_incomplete)
         if trimmed_width < width:
             # Adjust parts to fit trimmed width
             if filled_width > trimmed_width:
@@ -386,15 +422,28 @@ class BarWidget(Widget):
         return complete_part, incomplete_part
 
     def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
-        inner_width = width - len(self.char_start_bracket) - len(self.char_end_bracket)
+        progress_ratio = min(1.0, bar.progress)
+
+        inner_width = width - len(self.char_start_incomplete) - len(self.char_end_incomplete)
+        filled_width = int(inner_width * progress_ratio)
+
+        if filled_width == 0:
+            char_start = self.char_start_incomplete
+            char_end = self.char_end_incomplete
+        elif filled_width >= inner_width:
+            char_start = self.char_start_complete
+            char_end = self.char_end_complete
+        else:
+            char_start = self.char_start_progress
+            char_end = self.char_end_progress
+
+        inner_width = width - len(char_start) - len(char_end)
 
         if bar.total == 0:
             # Indeterminate progress
-            content = self.char_start_bracket + '-' * inner_width + self.char_end_bracket
+            content = char_start + '-' * inner_width + char_end
             content = self._trim(content, width)
             return (content, f'{self.theme.bar_incomplete_color}{content}{Colors.RESET}')
-
-        progress_ratio = min(1.0, bar.progress)
 
         # Get color for the bar
         if self.theme.use_gradient:
@@ -408,18 +457,19 @@ class BarWidget(Widget):
             # Smooth progress with partial blocks
             filled_blocks = progress_ratio * inner_width
             full_blocks = int(filled_blocks)
-            partial_block_index = int((filled_blocks - full_blocks) * (len(self.block_fractions) - 1))
+            partial_block_index = math.ceil((filled_blocks - full_blocks) * (len(self.char_complete_fractions) - 1))
+            # Progress._original_stderr.write(f'Partial block index: {partial_block_index}\n')
 
             # Only add partial block if there's actual progress beyond full blocks
             has_partial = full_blocks < inner_width and partial_block_index > 0
-            partial_char = self.block_fractions[partial_block_index] if has_partial else ''
+            partial_char = self.char_complete_fractions[partial_block_index] if has_partial and self.char_complete_fractions else ''
             incomplete_count = inner_width - full_blocks - (1 if has_partial else 0)
 
-            content = (self.char_start_bracket +
+            content = (char_start +
                        self.char_complete * full_blocks +
                        partial_char +
                        self.char_incomplete * incomplete_count +
-                       self.char_end_bracket)
+                       char_end)
             content = self._trim(content, width)
 
             return (content, f'{bar_color}{content}{Colors.RESET}')
@@ -429,13 +479,13 @@ class BarWidget(Widget):
             filled_width = int(inner_width * progress_ratio)
 
             if progress_ratio >= 1.0:
-                content = self.char_start_bracket + self.char_complete * inner_width + self.char_end_bracket
+                content = char_start + self.char_complete * inner_width + char_end
                 content = self._trim(content, width)
                 return (content, f'{bar_color}{content}{Colors.RESET}')
             else:
                 complete_part = self.char_complete * filled_width
                 incomplete_part = self.char_incomplete * (inner_width - filled_width)
-                content = self.char_start_bracket + complete_part + incomplete_part + self.char_end_bracket
+                content = char_start + complete_part + incomplete_part + char_end
                 trimmed_content = self._trim(content, width)
 
                 if not trimmed_content:
@@ -452,8 +502,8 @@ class BarWidget(Widget):
 
                 rendered_complete_part = f'{bar_color}{complete_part}{Colors.RESET}'
                 rendered_incomplete_part = f'{self.theme.bar_incomplete_color}{incomplete_part}{Colors.RESET}'
-                start_bracket = self.char_start_bracket if len(trimmed_content) > 1 else ''
-                end_bracket = self.char_end_bracket if len(trimmed_content) > 1 else ''
+                start_bracket = char_start if len(trimmed_content) > 1 else ''
+                end_bracket = char_end if len(trimmed_content) > 1 else ''
                 rendered_content = f'{start_bracket}{rendered_complete_part}{rendered_incomplete_part}{end_bracket}'
 
                 return (content, rendered_content)
@@ -548,13 +598,15 @@ class SpinnerWidget(Widget):
 
     def __init__(self,
                  style: str = 'dots',
+                 frames: Optional[List[str]] = None,
                  theme: Optional[Theme] = None,
                  use_unicode: Optional[bool] = None):
         self._lock = threading.Lock()
-        self.reset(style=style, theme=theme, use_unicode=use_unicode)
+        self.reset(style=style, frames=frames, theme=theme, use_unicode=use_unicode)
 
     def reset(self,
               style: str = 'dots',
+              frames: Optional[List[str]] = None,
               use_unicode: Optional[bool] = None,
               theme: Optional[Theme] = None):
         super().reset(theme=theme)
@@ -563,7 +615,9 @@ class SpinnerWidget(Widget):
             capability = _detect_terminal_capability()
             use_unicode = capability in [TerminalCapability.BASIC, TerminalCapability.ADVANCED]
 
-        if style == 'spinner' or not use_unicode:
+        if frames is not None:
+            self.frames = frames
+        elif style == 'spinner' or not use_unicode:
             self.frames = self.FRAMES_SPINNER
         elif style == 'dots':
             self.frames = self.FRAMES_DOTS
@@ -1185,6 +1239,7 @@ class _ProgressController:
                  min_update_interval: float = 0.1,
                  min_update_progress: float = 0.01,
                  update_on_item_change: bool = True,
+                 force_redraw: bool = False,
                  proxy_stdout: bool = True,
                  proxy_stderr: bool = True):
         """
@@ -1227,6 +1282,7 @@ class _ProgressController:
 
             self._min_update_progress = min_update_progress
             self._update_on_item_change = update_on_item_change
+            self._force_redraw = force_redraw
 
             self._proxy_stdout = proxy_stdout
             self._proxy_stderr = proxy_stderr
@@ -1355,6 +1411,19 @@ class _ProgressController:
         with self.lock():
             if instance:
                 instance._update_on_item_change = bool(value)
+
+    @property
+    def force_redraw(self) -> bool:
+        """Whether to force redraw on each update"""
+        return self.instance()._force_redraw
+
+    @force_redraw.setter
+    def force_redraw(self, value: bool):
+        """Set whether to force redraw on each update"""
+        instance = self.instance()
+        with self.lock():
+            if instance:
+                instance._force_redraw = bool(value)
 
     @classmethod
     def instance(cls) -> '_ProgressController':
@@ -1592,11 +1661,15 @@ class _ProgressController:
             "use_unicode",
             "theme",
             "use_unicode",
-            "char_start_bracket",
-            "char_end_bracket",
-            "char_complete",
+            "char_start_incomplete",
+            "char_start_progress",
+            "char_start_complete",
+            "char_end_incomplete",
+            "char_end_progress",
+            "char_end_complete",
             "char_incomplete",
-            "block_fractions",
+            "char_complete",
+            "char_complete_fractions",
         ]
         bar_widget_config = {key: kwargs[key] for key in bar_widget_args if key in kwargs}
 
@@ -1942,7 +2015,7 @@ class _ProgressController:
         lines_to_clear = self._last_lines_drawn_count
         clear_sequence = []
 
-        if force or force_top_lines + force_bottom_lines >= lines_to_clear:
+        if self.force_redraw or force or force_top_lines + force_bottom_lines >= lines_to_clear:
             # Move up and clear each previous line
             clear_sequence.append('\033[F'.join(['\r\033[K'] * lines_to_clear))  # Move up one line and clear from cursor to end of line
         else:
@@ -2024,6 +2097,14 @@ class ProgressAPI(Protocol):
 
     @update_on_item_change.setter
     def update_on_item_change(self, value: bool) -> None:
+        ...
+
+    @property
+    def force_redraw(self) -> bool:
+        ...
+
+    @force_redraw.setter
+    def force_redraw(self, value: bool) -> None:
         ...
 
     def close(self) -> None:
@@ -2199,6 +2280,23 @@ def _collection_watcher():
 # ============================================================================
 # Terminal Width Handling
 # ============================================================================
+
+def uwidth(c):
+    # combining marks
+    if unicodedata.combining(c):
+        return 0
+
+    # emoji (most terminals treat all emojis as width 2)
+    if "EMOJI" in unicodedata.name(c, ""):
+        return 2
+
+    # East Asian Width
+    eaw = unicodedata.east_asian_width(c)
+    if eaw in ("W", "F"):
+        return 2
+
+    return 1
+
 
 def _get_terminal_size(default: Optional[os.terminal_size] = None) -> Tuple[int, int]:
     """Return the width of the terminal in columns, with a safe fallback."""

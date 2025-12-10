@@ -154,7 +154,7 @@ def example_2():
     bars = []
     bar = Progress.add_custom_bar(
         total=80,
-        title=f"Custom icons",
+        title="Archery",
         indent=0,
         remove_on_complete=False,
         char_start_incomplete="🏹",
@@ -170,7 +170,7 @@ def example_2():
 
     bar = Progress.add_custom_bar(
         total=80,
-        title=f"Custom icons",
+        title="Soccer",
         indent=0,
         remove_on_complete=False,
         char_start_incomplete="🏃",
@@ -205,6 +205,8 @@ def example_3():
     for i in range(1, 301 + 1):
         q2.put_nowait(i)
 
+    Progress.watch_interval = 0.3
+
     Progress.create_row("h_layout1")
 
     Progress.create_column("v_layout1", parents=["h_layout1"])
@@ -217,13 +219,13 @@ def example_3():
         q1_action = random.choice([q1.get_nowait, q1.put_nowait])
         q2_action = random.choice([q2.get_nowait, q2.put_nowait])
 
-        for j in range(1, random.randint(1, 5) + 1):
+        for j in range(1, random.randint(1, 50) + 1):
             if q1_action == q1.put_nowait and not q1.full():
                 q1.put_nowait(i)
             elif q1_action == q1.get_nowait and not q1.empty():
                 q1.get_nowait()
 
-        for k in range(1, random.randint(1, 5) + 1):
+        for k in range(1, random.randint(1, 50) + 1):
             if q2_action == q2.put_nowait and not q2.full():
                 q2.put_nowait(i)
             elif q2_action == q2.get_nowait and not q2.empty():

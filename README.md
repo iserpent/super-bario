@@ -75,6 +75,7 @@ Completed bars can be removed automatically for log-style tasks (optional).
 ```bash
 pip install super-bario
 ```
+If you prefer, you can also use the library directly by importing [`progress.py`](https://github.com/iserpent/super-bario/blob/main/src/super_bario/progress.py).
 
 ---
 
@@ -222,7 +223,7 @@ view = View(bar, widgets=[SpeedWidget()], theme=Theme.minimal())
 Progress.add_bar(bar, view)
 ```
 
-# 🔧 Adding custom bar using helper function
+# 🔧 Create your own themed bar in one call
 
 ```python
 bars = []

@@ -336,8 +336,8 @@ def example_10():
     Progress.close()
 
 
-def example_10():
-    print("=== Example 10: Progress tree ===")
+def example_11():
+    print("=== Example 11: Progress tree ===")
 
     for i in progress(range(1, 2 + 1), title=lambda item: f"Processing i: {item.value}"):
         for j in progress(range(1, 20 + 1), title=lambda item: f"Processing j: {item.value}", indent=1, remove_on_complete=True):
@@ -373,10 +373,10 @@ def example_12():
         bar = Progress.create_bar(total=0, widgets=widgets)
         bars.append(bar)
 
-        for i in range(1, 50 + 1):
+        for i in range(1, 30 + 1):
             for bar in bars:
                 bar.increment()
-            time.sleep(0.2)
+            time.sleep(0.1)
             Progress.display()
 
 
@@ -385,7 +385,7 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
 
-    for i in range(0, 12 + 1):
+    for i in range(12, 12 + 1):
         if i != 0:
             time.sleep(1)
         globals()[f"example_{i}"]()

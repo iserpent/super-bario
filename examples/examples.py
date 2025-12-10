@@ -101,6 +101,22 @@ def example_0():
     t = threading.Thread(target=custom_bar_worker, args=(bar,))
     threads.append(t)
 
+    bar = Progress.add_custom_bar(
+        total=80,
+        title=f"Custom icons",
+        indent=0,
+        remove_on_complete=False,
+        char_start_bracket="🏹",
+        char_end_bracket="🎯",
+        char_complete='⇢',
+        char_incomplete=' ',
+        block_fractions=[],
+        layouts=["v_layout1_3"],
+    )
+
+    t = threading.Thread(target=custom_bar_worker, args=(bar,))
+    threads.append(t)
+
     complete_chars = ['━', '▰', '▪', '⣿']
     incomplete_chars = [' ', '▱', '▫', ' ']
     for idx, theme in enumerate([Theme.default(), Theme.minimal(), Theme.matrix(), Theme.fire(), Theme.load()]):

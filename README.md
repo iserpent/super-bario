@@ -218,6 +218,49 @@ from super_bario import View, Bar, Theme
 
 bar = Bar(total=300)
 view = View(bar, widgets=[SpeedWidget()], theme=Theme.minimal())
+
+Progress.add_bar(bar, view)
+```
+
+# 🔧 Adding custom bar using helper function
+
+```python
+bars = []
+
+bar = Progress.add_custom_bar(
+    total=100,
+    title="Custom icons",
+    indent=0,
+    remove_on_complete=False,
+    char_start_incomplete='🏹',
+    char_start_complete='🏅',
+    char_end_incomplete='',
+    char_end_complete='🎯',
+    char_incomplete=' ',
+    char_complete=' ',
+    char_complete_fractions=['➳'],
+)
+
+bars.append(bar)
+
+bar = Progress.add_custom_bar(
+    total=1000,
+    title="Custom fractions",
+    indent=0,
+    remove_on_complete=False,
+    char_start_incomplete='',
+    char_end_incomplete='',
+    char_incomplete=' ',
+    char_complete='⣿',
+    char_complete_fractions=['⣀', '⣄', '⣆', '⣇', '⣧', '⣷', '⣿'],
+)
+
+bars.append(bar)
+
+with Progress:  # another way to manage Progress lifecycle
+    for bar in bars:
+        for i in progress(range(1, 100 + 1), bar=bar):
+            time.sleep(0.02)
 ```
 
 ---

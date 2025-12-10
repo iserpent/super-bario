@@ -424,18 +424,18 @@ class BarWidget(Widget):
     def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
         progress_ratio = min(1.0, bar.progress)
 
-        inner_width = width - len(self.char_start_incomplete) - len(self.char_end_incomplete)
-        filled_width = int(inner_width * progress_ratio)
+        inner_width_with_chars_progress = width - len(self.char_start_progress) - len(self.char_end_progress)
+        filled_width_with_chars_progress = int(inner_width_with_chars_progress * progress_ratio)
 
-        if filled_width == 0:
-            char_start = self.char_start_incomplete
-            char_end = self.char_end_incomplete
-        elif filled_width >= inner_width:
+        if progress_ratio >= 1.0:
             char_start = self.char_start_complete
             char_end = self.char_end_complete
-        else:
+        elif filled_width_with_chars_progress > 0:
             char_start = self.char_start_progress
             char_end = self.char_end_progress
+        else:
+            char_start = self.char_start_incomplete
+            char_end = self.char_end_incomplete
 
         inner_width = width - len(char_start) - len(char_end)
 

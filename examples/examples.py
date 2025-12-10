@@ -385,7 +385,7 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
 
-    for i in range(12, 12 + 1):
+    for i in range(0, 12 + 1):
         if i != 0:
             time.sleep(1)
         globals()[f"example_{i}"]()

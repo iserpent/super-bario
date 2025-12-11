@@ -63,28 +63,12 @@ __all__ = [
 
 logger = logging.getLogger('super-bario')
 
-
-_DEFAULT_LAYOUT_NAME = '__default__'
 _sigwinch_pending = False
-_sigwinch_lock = threading.Lock()
-_sigwinch_condition = threading.Condition(_sigwinch_lock)
 _terminal_width = 0
 _terminal_height = 0
+_sigwinch_read_fd = None
+_sigwinch_write_fd = None
 
-def _init_terminal_width():
-    global _terminal_width, _terminal_height, _sigwinch_read_fd, _sigwinch_write_fd
-    try:
-        _terminal_width, _terminal_height = tuple(_get_terminal_size())
-    except Exception:
-        _terminal_width, _terminal_height = 80, 24
-
-    # Create a pipe for signal wakeup
-    _sigwinch_read_fd, _sigwinch_write_fd = os.pipe()
-    # Make both ends non-blocking
-    flags = fcntl.fcntl(_sigwinch_read_fd, fcntl.F_GETFL)
-    fcntl.fcntl(_sigwinch_read_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-    flags = fcntl.fcntl(_sigwinch_write_fd, fcntl.F_GETFL)
-    fcntl.fcntl(_sigwinch_write_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
 # ============================================================================
 # Terminal utilities
@@ -459,7 +443,6 @@ class BarWidget(Widget):
             filled_blocks = progress_ratio * inner_width
             full_blocks = int(filled_blocks)
             partial_block_index = math.ceil((filled_blocks - full_blocks) * (len(self.char_complete_fractions) - 1))
-            # Progress._original_stderr.write(f'Partial block index: {partial_block_index}\n')
 
             # Only add partial block if there's actual progress beyond full blocks
             has_partial = full_blocks < inner_width and partial_block_index > 0
@@ -1124,6 +1107,265 @@ class View:
 
 
 # ============================================================================
+# Layout - Organizing multiple progress bars
+# ============================================================================
+#
+class _Layout(MutableSequence):
+    """Layout configuration for progress bars"""
+
+    class Type(Enum):
+        ROW = 'row'
+        COLUMN = 'column'
+
+    def __init__(self, name: str, type: Type = Type.COLUMN, components: Optional[List[Union[View, '_Layout']]] = None):
+        self.name: str = name
+        self.parents: Set[str] = set()
+        self.type: _Layout.Type = type
+        self._components: List[Union[View, _Layout]] = components or []
+
+    def __getitem__(self, index):
+        return self._components[index]
+
+    def __setitem__(self, index, value):
+        self._components[index] = value
+
+    def __delitem__(self, index):
+        del self._components[index]
+
+    def __len__(self):
+        return len(self._components)
+
+    def insert(self, index, value):
+        self._components.insert(index, value)
+
+    def add(self, component: Union[View, '_Layout']):
+        self._components.append(component)
+
+    def add_parent(self, parent: str):
+        self.parents.add(parent)
+
+    def remove_parent(self, parent: str):
+        self.parents.discard(parent)
+
+    # Optional: convenience delegation
+    def __getattr__(self, name):
+        return getattr(self._components, name)
+
+    def __iter__(self):
+        return iter(self._components)
+
+    def __contains__(self, item):
+        return item in self._components
+
+    def __repr__(self):
+        return f"{type(self).__name__}({self._components!r})"
+
+    def render(self, available_width) -> List[str]:
+        """Render all progress bars"""
+        lines = []
+        if self.type == _Layout.Type.COLUMN:
+            for component in self:
+                rendered_lines = component.render(available_width)
+                lines.extend(rendered_lines)
+        elif len(self) > 0:  # ROW
+            approx_component_available_width = (available_width // len(self)) - 1
+            component_widths = [approx_component_available_width] * len(self)
+            leftover = available_width - (approx_component_available_width * len(self)) - len(self) + 1
+
+            while leftover > 0:
+                for i in range(len(component_widths)):
+                    component_widths[i] += 1
+                    leftover -= 1
+                    if leftover == 0:
+                        break
+
+            rendered_components = []
+            for idx, component in enumerate(self):
+                component_available_width = component_widths[idx]
+                rendered_lines = component.render(component_available_width)
+                if isinstance(component, Bar):
+                    rendered_components.append([rendered_lines])
+                else:
+                    rendered_components.append(rendered_lines)
+
+            max_lines = max(len(r) for r in rendered_components)
+            for idx, rendered in enumerate(rendered_components):
+                component_available_width = component_widths[idx]
+                added_lines_count = max_lines - len(rendered)
+                rendered.extend([' ' * component_available_width] * added_lines_count)
+
+            for i in range(max_lines):
+                line_parts = [rendered[i] for rendered in rendered_components]
+                line = ' '.join(line_parts)
+                lines.append(line)
+
+        return lines
+
+
+# ============================================================================
+# StdProxy - Redirecting stdout/stderr to progress controller
+# ============================================================================
+
+class _StdProxy:
+    """Proxy to redirect stdout/stderr to progress controller"""
+
+    def __init__(self, controller: '_ProgressController', stream: TextIO):
+        self.controller = controller
+        self.stream = stream
+        self.buffer = []
+
+    def write(self, data):
+        if not data:
+            return
+
+        with self.controller.lock():
+            self.buffer.append(data)
+
+            if '\n' not in data:
+                return
+
+            full_data = ''.join(self.buffer)
+            self.buffer = []
+
+            # Check if there's trailing data after the last newline
+            if not full_data.endswith('\n'):
+                # Split at last newline
+                last_newline = full_data.rfind('\n')
+                complete_part = full_data[:last_newline + 1]
+                trailing_part = full_data[last_newline + 1:]
+
+                # Keep trailing part in buffer
+                self.buffer.append(trailing_part)
+                data = complete_part
+            else:
+                data = full_data
+
+            if data:
+                new_line_count = data.count('\n')
+                self.controller._clear_internal(force_top_lines=new_line_count)
+                self.stream.write(data)
+                self.controller._display_internal()
+
+    def flush(self):
+        with self.controller.lock():
+            self._flush_internal()
+
+    def _flush_internal(self):
+        if self.buffer:
+            data = ''.join(itertools.chain(self.buffer, ['\n']))
+            self.buffer = []
+
+            new_line_count = data.count('\n')
+            self.controller._clear_internal(force_top_lines=new_line_count)
+            self.stream.write(data)
+            self.stream.flush()
+            self.controller._display_internal()
+        else:
+            self.stream.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+
+# ============================================================================
+# Collection Watcher
+# ============================================================================
+
+def _collection_watcher():
+    """Watch collections for changes and update watched bars"""
+    error_count = 0
+    max_errors = 10
+
+    while True:
+        try:
+            time.sleep(_ProgressController.instance()._watch_interval)
+
+            with _ProgressController.lock():
+                controller = _ProgressController._instance
+                if controller is None:
+                    continue
+
+                for bar in list(controller._watched_bars):
+                    collection_ref = controller._watched_collections.get(bar)
+                    if collection_ref is None:
+                        continue
+
+                    collection = collection_ref()
+                    if collection is None:
+                        continue
+
+                    if isinstance(collection, Queue):
+                        current_size = collection.qsize()
+                    elif isinstance(collection, Sized):
+                        current_size = len(collection)
+                    else:
+                        continue
+
+                    if bar.current != current_size:
+                        bar._update_internal(current_size)
+
+                controller._refresh_internal()
+
+            error_count = 0  # Reset on success
+        except Exception:
+            error_count += 1
+            if error_count <= max_errors:
+                logger.exception('Collection watcher failed (error %d/%d)', error_count, max_errors)
+            elif error_count == max_errors + 1:
+                logger.error('Collection watcher: suppressing further errors')
+            # Continue despite errors, but stop spamming logs
+            time.sleep(1)  # Back off on errors
+
+
+#===========================================================================
+# Terminal Width Watcher
+# ===========================================================================
+
+def _terminal_width_watcher():
+    error_count = 0
+    max_errors = 10
+
+    while True:
+        try:
+            global _sigwinch_pending
+
+            if _sigwinch_read_fd is not None:
+                # Block until data is available on the pipe
+                select.select([_sigwinch_read_fd], [], [])
+
+                # Drain the pipe
+                try:
+                    while True:
+                        os.read(_sigwinch_read_fd, 1024)
+                except (OSError, BlockingIOError):
+                    pass  # Pipe is empty now
+
+            # Check and clear the flag
+            if not _sigwinch_pending:
+                continue
+            _sigwinch_pending = False
+
+
+            global _terminal_width, _terminal_height
+            _terminal_width, _terminal_height = _get_terminal_size()
+
+            with _ProgressController.lock():
+                if _ProgressController._instance is None:
+                    continue
+                _ProgressController._instance._refresh_internal(force_clear=True)
+
+            error_count = 0  # Reset on success
+        except Exception:
+            error_count += 1
+            if error_count <= max_errors:
+                logger.exception('Terminal width watcher failed (error %d/%d)', error_count, max_errors)
+            elif error_count == max_errors + 1:
+                logger.error('Terminal width watcher: suppressing further errors')
+            # Continue despite errors, but stop spamming logs
+            time.sleep(1)  # Back off on errors
+
+
+# ============================================================================
 # Progress _ProgressController - Managing multiple progress bars
 # ============================================================================
 
@@ -1134,97 +1376,7 @@ class _ProgressController:
     _initialized = False
     _terminal_width_watcher_thread = None
     _collection_watcher_thread = None
-
-    class Layout(MutableSequence):
-        """Layout configuration for progress bars"""
-
-        class Type(Enum):
-            ROW = 'row'
-            COLUMN = 'column'
-
-        def __init__(self, name: str, type: Type = Type.COLUMN, components: Optional[List[Union[View, '_ProgressController.Layout']]] = None):
-            self.name: str = name
-            self.parents: Set[str] = set()
-            self.type: '_ProgressController.Layout.Type' = type
-            self._components: List[Union[View, '_ProgressController.Layout']] = components or []
-
-        def __getitem__(self, index):
-            return self._components[index]
-
-        def __setitem__(self, index, value):
-            self._components[index] = value
-
-        def __delitem__(self, index):
-            del self._components[index]
-
-        def __len__(self):
-            return len(self._components)
-
-        def insert(self, index, value):
-            self._components.insert(index, value)
-
-        def add(self, component: Union[View, '_ProgressController.Layout']):
-            self._components.append(component)
-
-        def add_parent(self, parent: str):
-            self.parents.add(parent)
-
-        def remove_parent(self, parent: str):
-            self.parents.discard(parent)
-
-        # Optional: convenience delegation
-        def __getattr__(self, name):
-            return getattr(self._components, name)
-
-        def __iter__(self):
-            return iter(self._components)
-
-        def __contains__(self, item):
-            return item in self._components
-
-        def __repr__(self):
-            return f"{type(self).__name__}({self._components!r})"
-
-        def render(self, available_width) -> List[str]:
-            """Render all progress bars"""
-            lines = []
-            if self.type == _ProgressController.Layout.Type.COLUMN:
-                for component in self:
-                    rendered_lines = component.render(available_width)
-                    lines.extend(rendered_lines)
-            elif len(self) > 0:  # ROW
-                approx_component_available_width = (available_width // len(self)) - 1
-                component_widths = [approx_component_available_width] * len(self)
-                leftover = available_width - (approx_component_available_width * len(self)) - len(self) + 1
-
-                while leftover > 0:
-                    for i in range(len(component_widths)):
-                        component_widths[i] += 1
-                        leftover -= 1
-                        if leftover == 0:
-                            break
-
-                rendered_components = []
-                for idx, component in enumerate(self):
-                    component_available_width = component_widths[idx]
-                    rendered_lines = component.render(component_available_width)
-                    if isinstance(component, Bar):
-                        rendered_components.append([rendered_lines])
-                    else:
-                        rendered_components.append(rendered_lines)
-
-                max_lines = max(len(r) for r in rendered_components)
-                for idx, rendered in enumerate(rendered_components):
-                    component_available_width = component_widths[idx]
-                    added_lines_count = max_lines - len(rendered)
-                    rendered.extend([' ' * component_available_width] * added_lines_count)
-
-                for i in range(max_lines):
-                    line_parts = [rendered[i] for rendered in rendered_components]
-                    line = ' '.join(line_parts)
-                    lines.append(line)
-
-            return lines
+    _DEFAULT_LAYOUT_NAME = '__default__'
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -1241,6 +1393,7 @@ class _ProgressController:
                  min_update_progress: float = 0.01,
                  update_on_item_change: bool = True,
                  force_redraw: bool = False,
+                 stream: TextIO = sys.stderr,
                  proxy_stdout: bool = True,
                  proxy_stderr: bool = True):
         """
@@ -1250,6 +1403,11 @@ class _ProgressController:
             remove_on_complete: Clear progress bars when complete
             terminal_padding_right: Padding from right terminal edge for resizing
             watch_interval: Interval in seconds to check terminal size
+            min_update_interval: Minimum interval in seconds between updates
+            min_update_progress: Minimum progress change to trigger update
+            update_on_item_change: Update when current item changes
+            force_redraw: Force redraw on each update
+            stream: Output stream for progress bars
             proxy_stdout: Redirect stdout to progress controller
             proxy_stderr: Redirect stderr to progress controller
         """
@@ -1288,7 +1446,6 @@ class _ProgressController:
             self._proxy_stdout = proxy_stdout
             self._proxy_stderr = proxy_stderr
 
-            self._is_in_tty = sys.stderr.isatty()
             self._last_lines_drawn_count = 0
 
             self._bar_usage: WeakKeyDictionary[Bar, int] = WeakKeyDictionary()
@@ -1300,22 +1457,25 @@ class _ProgressController:
             self._watched_collections: WeakKeyDictionary[Bar, ReferenceType] = WeakKeyDictionary()
 
             self.layouts = {
-                _DEFAULT_LAYOUT_NAME: self.Layout(_DEFAULT_LAYOUT_NAME, type=_ProgressController.Layout.Type.COLUMN)
+                self._DEFAULT_LAYOUT_NAME: _Layout(self._DEFAULT_LAYOUT_NAME, type=_Layout.Type.COLUMN)
             }
 
-            self._registered_layouts: Dict[str, _ProgressController.Layout] = {
-                _DEFAULT_LAYOUT_NAME: self.layouts[_DEFAULT_LAYOUT_NAME]
+            self._registered_layouts: Dict[str, _Layout] = {
+                self._DEFAULT_LAYOUT_NAME: self.layouts[self._DEFAULT_LAYOUT_NAME]
             }
 
             self._layout_usage: Dict[str, int]= defaultdict(int)
 
+            self._stream: TextIO = stream
+            self._is_in_tty = self._stream.isatty()
+
             self._original_stdout: TextIO = sys.stdout
             if self._proxy_stdout:
-                sys.stdout = self.StdProxy(self, self._original_stdout)
+                sys.stdout = _StdProxy(self, self._original_stdout)
 
             self._original_stderr: TextIO = sys.stderr
             if self._proxy_stderr:
-                sys.stderr = self.StdProxy(self, self._original_stderr)
+                sys.stderr = _StdProxy(self, self._original_stderr)
 
             if not _ProgressController._terminal_width_watcher_thread:
                 _ProgressController._terminal_width_watcher_thread = threading.Thread(target=_terminal_width_watcher, daemon=True)
@@ -1358,138 +1518,82 @@ class _ProgressController:
     @property
     def watch_interval(self) -> float:
         """Collection watch update interval in seconds"""
-        return self.instance()._watch_interval
+        return self._watch_interval
 
     @watch_interval.setter
     def watch_interval(self, value: float):
         """Set collection watch update interval"""
         if value <= 0:
             raise ValueError("watch_interval must be positive")
-        instance = self.instance()
         with self.lock():
-            if instance:
-                instance._watch_interval = value
+            self._watch_interval = value
 
     @property
     def min_update_interval(self) -> float:
         """Minimum update interval in seconds"""
-        return self.instance()._min_update_interval
+        return self._min_update_interval
 
     @min_update_interval.setter
     def min_update_interval(self, value: float):
         """Set minimum update interval"""
         if value < 0:
             raise ValueError("min_update_interval must be non-negative")
-        instance = self.instance()
         with self.lock():
-            if instance:
-                instance._min_update_interval = value
+            self._min_update_interval = value
 
     @property
     def min_update_progress(self) -> float:
         """Minimum update progress change"""
-        return self.instance()._min_update_progress
+        return self._min_update_progress
 
     @min_update_progress.setter
     def min_update_progress(self, value: float):
         """Set minimum update progress change"""
         if value < 0 or value > 1.0:
             raise ValueError("min_update_progress must be between 0.0 and 1.0")
-        instance = self.instance()
         with self.lock():
-            if instance:
-                instance._min_update_progress = value
+            self._min_update_progress = value
 
     @property
     def update_on_item_change(self) -> bool:
         """Whether to update on item change"""
-        return self.instance()._update_on_item_change
+        return self._update_on_item_change
 
     @update_on_item_change.setter
     def update_on_item_change(self, value: bool):
         """Set whether to update on item change"""
-        instance = self.instance()
         with self.lock():
-            if instance:
-                instance._update_on_item_change = bool(value)
+            self._update_on_item_change = bool(value)
 
     @property
     def force_redraw(self) -> bool:
         """Whether to force redraw on each update"""
-        return self.instance()._force_redraw
+        return self._force_redraw
 
     @force_redraw.setter
     def force_redraw(self, value: bool):
         """Set whether to force redraw on each update"""
-        instance = self.instance()
         with self.lock():
-            if instance:
-                instance._force_redraw = bool(value)
+            self._force_redraw = bool(value)
+
+    @property
+    def stream(self) -> TextIO:
+        """Get the output stream for progress bars"""
+        return self._stream
+
+    @stream.setter
+    def stream(self, value: TextIO):
+        """Set the output stream for progress bars"""
+        if isinstance(value, _StdProxy):
+            value = value.stream
+        with self.lock():
+            self._stream = value
+            self._is_in_tty = value.isatty()
 
     @classmethod
     def instance(cls) -> '_ProgressController':
         """Get the singleton instance of _ProgressController"""
         return cls._instance or cls()
-
-    class StdProxy:
-        """Proxy to redirect stdout/stderr to progress controller"""
-
-        def __init__(self, controller: '_ProgressController', stream: TextIO):
-            self.controller = controller
-            self.stream = stream
-            self.buffer = []
-
-        def write(self, data):
-            if not data:
-                return
-
-            with self.controller.lock():
-                self.buffer.append(data)
-
-                if '\n' not in data:
-                    return
-
-                full_data = ''.join(self.buffer)
-                self.buffer = []
-
-                # Check if there's trailing data after the last newline
-                if not full_data.endswith('\n'):
-                    # Split at last newline
-                    last_newline = full_data.rfind('\n')
-                    complete_part = full_data[:last_newline + 1]
-                    trailing_part = full_data[last_newline + 1:]
-
-                    # Keep trailing part in buffer
-                    self.buffer.append(trailing_part)
-                    data = complete_part
-                else:
-                    data = full_data
-
-                if data:
-                    new_line_count = data.count('\n')
-                    self.controller._clear_internal(force_top_lines=new_line_count)
-                    self.stream.write(data)
-                    self.controller._display_internal()
-
-        def flush(self):
-            with self.controller.lock():
-                self._flush_internal()
-
-        def _flush_internal(self):
-            if self.buffer:
-                data = ''.join(itertools.chain(self.buffer, ['\n']))
-                self.buffer = []
-
-                new_line_count = data.count('\n')
-                self.controller._clear_internal(force_top_lines=new_line_count)
-                self.stream.write(data)
-                self.stream.flush()
-                self.controller._display_internal()
-            else:
-                self.stream.flush()
-
-        def __getattr__(self, name):
-            return getattr(self.stream, name)
 
     def __del__(self):
         """Destructor to restore original streams"""
@@ -1521,11 +1625,11 @@ class _ProgressController:
             self._refresh_internal(final=True)
 
             if self._proxy_stdout and self._original_stdout:
-                if isinstance(sys.stdout, self.StdProxy):
+                if isinstance(sys.stdout, _StdProxy):
                     sys.stdout._flush_internal()
                 sys.stdout = self._original_stdout
             if self._proxy_stderr and self._original_stderr:
-                if isinstance(sys.stderr, self.StdProxy):
+                if isinstance(sys.stderr, _StdProxy):
                     sys.stderr._flush_internal()
                 sys.stderr = self._original_stderr
 
@@ -1548,7 +1652,7 @@ class _ProgressController:
             view = self.create_view(bar, **kwargs)
 
         if layouts is None:
-            layouts = [_DEFAULT_LAYOUT_NAME]
+            layouts = [self._DEFAULT_LAYOUT_NAME]
 
         with self.lock():
             self._add_bar_internal(bar, view, layouts)
@@ -1777,24 +1881,20 @@ class _ProgressController:
         if bar in self._active_bars:
             self.remove_bar(bar)
 
-    def get_layout(self, name: str):
-        """Add a new layout configuration"""
-        return self._registered_layouts[name]
-
-    def create_layout(self, name: str, type: Layout.Type = Layout.Type.COLUMN, parents: Optional[List[str]] = None):
+    def _create_layout(self, name: str, type: _Layout.Type = _Layout.Type.COLUMN, parents: Optional[List[str]] = None):
         """Add a new layout configuration"""
         if parents is None:
-            parents = [_DEFAULT_LAYOUT_NAME]
+            parents = [self._DEFAULT_LAYOUT_NAME]
 
         with self.lock():
             self._create_layout_internal(name, parents, type=type)
 
-    def _create_layout_internal(self, name: str, parents: List[str], type: Layout.Type = Layout.Type.COLUMN):
+    def _create_layout_internal(self, name: str, parents: List[str], type: _Layout.Type = _Layout.Type.COLUMN):
         """Internal method to create layout without locking"""
         if name in self._registered_layouts:
             raise ValueError(f"Layout '{name}' already exists. Note: layout names must be globally unique.")
 
-        _layout = self.Layout(name, type=type)
+        _layout = _Layout(name, type=type)
         self._registered_layouts[name] = _layout
 
         for parent in parents:
@@ -1805,7 +1905,7 @@ class _ProgressController:
     def add_layout(self, name: str, parents: Optional[List[str]] = None):
         """Add a new layout configuration"""
         if parents is None:
-            parents = [_DEFAULT_LAYOUT_NAME]
+            parents = [self._DEFAULT_LAYOUT_NAME]
 
         with self.lock():
             self._add_layout_internal(name, parents)
@@ -1832,24 +1932,24 @@ class _ProgressController:
             self._registered_layouts[parent].append(_layout)
             self._layout_usage[name] += 1
 
-    def _get_layout_descendants(self, layout: '_ProgressController.Layout') -> Set['_ProgressController.Layout']:
+    def _get_layout_descendants(self, layout: _Layout) -> Set[_Layout]:
         """Recursively get all descendant layouts"""
         descendants = set()
         descendants.add(layout.name)
 
         for component in layout:
-            if isinstance(component, _ProgressController.Layout):
+            if isinstance(component, _Layout):
                 descendants.update(self._get_layout_descendants(component))
 
         return descendants
 
     def create_row(self, name: str, parents: Optional[List[str]] = None):
         """Create a layout that arranges bars side by side"""
-        self.create_layout(name, type=_ProgressController.Layout.Type.ROW, parents=parents)
+        self._create_layout(name, type=_Layout.Type.ROW, parents=parents)
 
     def create_column(self, name: str, parents: Optional[List[str]] = None):
         """Create a layout that arranges bars stacked vertically"""
-        self.create_layout(name, type=_ProgressController.Layout.Type.COLUMN, parents=parents)
+        self._create_layout(name, type=_Layout.Type.COLUMN, parents=parents)
 
     def remove_layout(self, name: str, parents: Optional[List[str]] = None):
         """Remove a layout configuration"""
@@ -1858,7 +1958,7 @@ class _ProgressController:
 
     def _remove_layout_internal(self, name: str, parents: Optional[List[str]]):
         """Remove a layout configuration"""
-        if name == _DEFAULT_LAYOUT_NAME:
+        if name == self._DEFAULT_LAYOUT_NAME:
             raise ValueError("Cannot remove default layout")
 
         _layout = self._registered_layouts.get(name)
@@ -1885,7 +1985,7 @@ class _ProgressController:
                 del self._layout_usage[name]
                 del self._registered_layouts[name]
 
-    def _clear_layout_internal(self, layout: '_ProgressController.Layout'):
+    def _clear_layout_internal(self, layout: _Layout):
         """Recursively clear all bars from a layout"""
         for component in layout:
             if isinstance(component, View):
@@ -1897,7 +1997,7 @@ class _ProgressController:
         """Render all progress bars according to layout"""
         if not self._is_in_tty or self._quiet:
             return []
-        lines = self.layouts[_DEFAULT_LAYOUT_NAME].render(available_width)
+        lines = self.layouts[self._DEFAULT_LAYOUT_NAME].render(available_width)
         return lines
 
     def hide(self):
@@ -1942,7 +2042,7 @@ class _ProgressController:
 
         try:
             # Hide cursor during update
-            self._original_stderr.write('\033[?25l')
+            self._stream.write('\033[?25l')
 
             lines = self._render_internal()
             lines_to_draw_count = len(lines)
@@ -1955,7 +2055,7 @@ class _ProgressController:
             logger.exception('Display progress failed')
         finally:
             # Show cursor again
-            self._original_stderr.write('\033[?25h')
+            self._stream.write('\033[?25h')
 
     def _render_internal(self) -> List[str]:
         """Render the progress bars to lines"""
@@ -1995,8 +2095,8 @@ class _ProgressController:
             output += '\n'
             self._last_lines_drawn_count += 1
 
-        self._original_stderr.write(output)
-        self._original_stderr.flush()
+        self._stream.write(output)
+        self._stream.flush()
 
     def clear(self, force: bool = False, force_top_lines: int = 0, force_bottom_lines: int = 0):
         """Clear the displayed progress bars"""
@@ -2032,9 +2132,11 @@ class _ProgressController:
 
         # Move to beginning of first line
         clear_sequence.append('\r')
-        self._original_stderr.write(''.join(clear_sequence))
+
+        self._stream.write(''.join(clear_sequence))
+        self._stream.flush()
+
         self._last_lines_drawn_count = 0
-        self._original_stderr.flush()
 
 
 class ProgressAPI(Protocol):
@@ -2109,6 +2211,14 @@ class ProgressAPI(Protocol):
     def force_redraw(self, value: bool) -> None:
         ...
 
+    @property
+    def stream(self) -> TextIO:
+        ...
+
+    @stream.setter
+    def stream(self, value: TextIO) -> None:
+        ...
+
     def close(self) -> None:
         ...
 
@@ -2134,12 +2244,6 @@ class ProgressAPI(Protocol):
         ...
 
     def remove_watch(self, bar: Bar) -> None:
-        ...
-
-    def get_layout(self, name: str) -> _ProgressController.Layout:
-        ...
-
-    def create_layout(self, name: str, type: _ProgressController.Layout.Type = ..., parents: Optional[List[str]] = None) -> None:
         ...
 
     def create_row(self, name: str, parents: Optional[List[str]] = None) -> None:
@@ -2221,62 +2325,9 @@ class Progress(metaclass=_ProgressMeta):  # pyright: ignore[reportRedeclaration]
     def __getattr__(self, name):
         return getattr(_ProgressController.instance(), name)
 
-    Layout = _ProgressController.Layout
-    StdProxy = _ProgressController.StdProxy
-
 
 if TYPE_CHECKING:
     Progress: ProgressAPI  # type: ignore[assignment]
-
-
-# ============================================================================
-# Collection Watcher
-# ============================================================================
-
-def _collection_watcher():
-    """Watch collections for changes and update watched bars"""
-    error_count = 0
-    max_errors = 10
-
-    while True:
-        try:
-            time.sleep(_ProgressController.instance()._watch_interval)
-
-            with _ProgressController.lock():
-                controller = _ProgressController._instance
-                if controller is None:
-                    continue
-
-                for bar in list(controller._watched_bars):
-                    collection_ref = controller._watched_collections.get(bar)
-                    if collection_ref is None:
-                        continue
-
-                    collection = collection_ref()
-                    if collection is None:
-                        continue
-
-                    if isinstance(collection, Queue):
-                        current_size = collection.qsize()
-                    elif isinstance(collection, Sized):
-                        current_size = len(collection)
-                    else:
-                        continue
-
-                    if bar.current != current_size:
-                        bar._update_internal(current_size)
-
-                controller._refresh_internal()
-
-            error_count = 0  # Reset on success
-        except Exception:
-            error_count += 1
-            if error_count <= max_errors:
-                logger.exception('Collection watcher failed (error %d/%d)', error_count, max_errors)
-            elif error_count == max_errors + 1:
-                logger.error('Collection watcher: suppressing further errors')
-            # Continue despite errors, but stop spamming logs
-            time.sleep(1)  # Back off on errors
 
 
 # ============================================================================
@@ -2289,7 +2340,7 @@ def _get_terminal_size(default: Optional[os.terminal_size] = None) -> Tuple[int,
         default = os.terminal_size([80, 24])
     try:
         # Python 3.3+: built-in, cross-platform
-        return os.get_terminal_size(sys.stderr.fileno())
+        return os.get_terminal_size(Progress.stream.fileno())
     except OSError:
         # Some environments (cron, IDEs, CI, redirected stdout) have no TTY
         pass
@@ -2313,10 +2364,26 @@ def _detect_terminal_capability() -> TerminalCapability:
         return TerminalCapability.ADVANCED
 
     # Basic ANSI support
-    if term and term != 'dumb' and sys.stderr.isatty():
+    if term and term != 'dumb' and Progress.stream.isatty():
         return TerminalCapability.BASIC
 
     return TerminalCapability.MINIMAL
+
+
+def _init_terminal_width():
+    global _terminal_width, _terminal_height, _sigwinch_read_fd, _sigwinch_write_fd
+    try:
+        _terminal_width, _terminal_height = _get_terminal_size()
+    except Exception:
+        _terminal_width, _terminal_height = 80, 24
+
+    # Create a pipe for signal wakeup
+    _sigwinch_read_fd, _sigwinch_write_fd = os.pipe()
+    # Make both ends non-blocking
+    flags = fcntl.fcntl(_sigwinch_read_fd, fcntl.F_GETFL)
+    fcntl.fcntl(_sigwinch_read_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+    flags = fcntl.fcntl(_sigwinch_write_fd, fcntl.F_GETFL)
+    fcntl.fcntl(_sigwinch_write_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
 
 _init_terminal_width()
@@ -2347,49 +2414,6 @@ def _update_terminal_width(signum, frame):
 _prev_sigwinch_handler = signal.getsignal(signal.SIGWINCH)
 signal.signal(signal.SIGWINCH, _update_terminal_width)
 
-
-def _terminal_width_watcher():
-    error_count = 0
-    max_errors = 10
-
-    while True:
-        try:
-            global _sigwinch_pending
-
-            if _sigwinch_read_fd is not None:
-                # Block until data is available on the pipe
-                select.select([_sigwinch_read_fd], [], [])
-
-                # Drain the pipe
-                try:
-                    while True:
-                        os.read(_sigwinch_read_fd, 1024)
-                except (OSError, BlockingIOError):
-                    pass  # Pipe is empty now
-
-            # Check and clear the flag
-            if not _sigwinch_pending:
-                continue
-            _sigwinch_pending = False
-
-            with _ProgressController.lock():
-                if _ProgressController._instance is None:
-                    continue
-
-                global _terminal_width, _terminal_height
-                _terminal_width, _terminal_height = _get_terminal_size()
-
-                _ProgressController._instance._refresh_internal(force_clear=True)
-
-            error_count = 0  # Reset on success
-        except Exception:
-            error_count += 1
-            if error_count <= max_errors:
-                logger.exception('Terminal width watcher failed (error %d/%d)', error_count, max_errors)
-            elif error_count == max_errors + 1:
-                logger.error('Terminal width watcher: suppressing further errors')
-            # Continue despite errors, but stop spamming logs
-            time.sleep(1)  # Back off on errors
 
 # ============================================================================
 # Convenience Functions and Context Managers

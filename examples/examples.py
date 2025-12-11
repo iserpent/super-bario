@@ -39,6 +39,9 @@ def example_0():
             time.sleep(random.uniform(0.4, 0.5))
             print(f"Demo of the multi-threaded stderr handling: Step {i}", file=sys.stderr)
 
+    # Use sys.stdout or sys.stderr as output stream for Progress (default is sys.stderr)
+    Progress.stream = sys.stdout
+
     Progress.create_row("h_layout1")
     Progress.create_row("h_layout2")
     Progress.create_row("h_layout3")

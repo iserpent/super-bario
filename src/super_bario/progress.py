@@ -2286,10 +2286,10 @@ def _collection_watcher():
 def _get_terminal_size(default: Optional[os.terminal_size] = None) -> Tuple[int, int]:
     """Return the width of the terminal in columns, with a safe fallback."""
     if default is None:
-        default = os.terminal_size([24, 80])
+        default = os.terminal_size([80, 24])
     try:
         # Python 3.3+: built-in, cross-platform
-        return os.get_terminal_size()
+        return os.get_terminal_size(sys.stderr.fileno())
     except OSError:
         # Some environments (cron, IDEs, CI, redirected stdout) have no TTY
         pass

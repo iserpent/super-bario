@@ -1694,14 +1694,6 @@ class _ProgressController:
         ]
         time_widget_config = {key: kwargs[key] for key in time_widget_args if key in kwargs}
 
-        widgets = [
-            TitleWidget(**title_widget_config),
-            BarWidget(**bar_widget_config),
-            PercentageWidget(**percentage_widget_config),
-            CounterWidget(**counter_widget_config),
-            TimeWidget(**time_widget_config)
-        ]
-
         view_args = [
             "bar",
             "widgets",
@@ -1715,14 +1707,23 @@ class _ProgressController:
         ]
         view_config = {key: kwargs[key] for key in view_args if key in kwargs}
 
-        bar = Bar(**bar_config)
+        bar = view_config.get("bar") or Bar(**bar_config)
 
-        view_config["bar"] = view_config.get("bar", bar)
-        view_config["widgets"] = view_config.get("widgets", widgets)
+        widgets = view_config.get("widgets") or [
+            TitleWidget(**title_widget_config),
+            BarWidget(**bar_widget_config),
+            PercentageWidget(**percentage_widget_config),
+            CounterWidget(**counter_widget_config),
+            TimeWidget(**time_widget_config)
+        ]
 
-        view = View(**view_config)
+        view_config["bar"] = bar
+        view_config["widgets"] = widgets
 
-        self.add_bar(bar, view, layouts=kwargs.get("layouts", None))
+        view = kwargs.get("view") or View(**view_config)
+        layouts = kwargs.get("layouts")
+
+        self.add_bar(bar, view, layouts=layouts)
 
         return bar
 

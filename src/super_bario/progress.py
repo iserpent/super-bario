@@ -2282,23 +2282,6 @@ def _collection_watcher():
 # Terminal Width Handling
 # ============================================================================
 
-def uwidth(c):
-    # combining marks
-    if unicodedata.combining(c):
-        return 0
-
-    # emoji (most terminals treat all emojis as width 2)
-    if "EMOJI" in unicodedata.name(c, ""):
-        return 2
-
-    # East Asian Width
-    eaw = unicodedata.east_asian_width(c)
-    if eaw in ("W", "F"):
-        return 2
-
-    return 1
-
-
 def _get_terminal_size(default: Optional[os.terminal_size] = None) -> Tuple[int, int]:
     """Return the width of the terminal in columns, with a safe fallback."""
     if default is None:

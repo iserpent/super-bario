@@ -16,7 +16,12 @@ A simple, elegant wrapper over any iterable — with optional counters, themes, 
 Bar titles can be static strings **or callables**:
 
 ```python
-lambda item: f"Item {item.index}: {item.value}"
+from super_bario import progress
+
+...
+
+for fname in progress(files, title=lambda p: f"Processing file #{p.index}: {p.value}"):
+    # ...
 ```
 
 Super Bario updates them automatically for every loop iteration.
@@ -124,9 +129,9 @@ queue = Queue()
 q = Queue(maxsize=1000)
 l = []
 
-Progress.create_row_layout("row_1")
-Progress.create_column_layout("col_1", parents=["row_1"])
-Progress.create_column_layout("col_2", parents=["row_1"])
+Progress.create_row("row_1")
+Progress.create_column("col_1", parents=["row_1"])
+Progress.create_column("col_2", parents=["row_1"])
 
 Progress.add_watch(q, "Queue", layouts=["col_1"])
 Progress.add_watch(l, "List", max=1000, layouts=["col_2"])
@@ -163,11 +168,11 @@ bar2 = Bar(total=50, title="Subtasks")
 view1 = View(bar1, theme=Theme.fire())
 view2 = View(bar2, theme=Theme.minimal())
 
-Progress.create_row_layout("row_1")
-Progress.create_column_layout("col_1", parents=["row_1"])
-Progress.create_column_layout("col_2", parents=["row_1"])
+Progress.create_row("row_1")
+Progress.create_column("col_1", parents=["row_1"])
+Progress.create_column("col_2", parents=["row_1"])
 
-Progress.create_row_layout("row_2")
+Progress.create_row("row_2")
 
 
 Progress.add_bar(bar1, view=view1, layouts=["col_1"])
@@ -263,6 +268,51 @@ with Progress:  # another way to manage Progress lifecycle
         for i in progress(range(1, 100 + 1), bar=bar):
             time.sleep(0.02)
 ```
+
+---
+
+#  🔧 Customize behavior
+
+Super Bario exposes several global configuration options on the Progress class that control how progress bars are rendered, updated, and cleaned up.
+
+## Display & lifecycle
+
+* Progress.remove_on_complete: bool  
+  Remove progress bars from the display once all of them are complete.  
+  Default: False
+
+* Progress.force_redraw: bool  
+  Clear the entire output before each redraw. This may cause visible flickering, but helps avoid rendering artifacts when using Unicode characters that occupy more than one terminal cell.  
+  Default: False
+
+* Progress.stream: TextIO  
+  Output stream used for rendering progress bars.  
+  Default: sys.stderr
+
+## Terminal layout & resizing
+
+* Progress.terminal_padding_right: int  
+  Number of characters reserved on the right side of the terminal.  
+  This margin helps handle terminal resizing more safely. Setting it to 0 uses the full width, but resize handling may be less reliable.  
+  Default: 20
+
+## Update frequency & performance
+
+* Progress.watch_interval: float  
+  How often watched queues are polled, in seconds.  
+  Default: 0.5
+
+* Progress.min_update_interval: float  
+  Minimum time (in seconds) between visual updates.  
+  Default: 0.1
+
+* Progress.min_update_progress: float  
+  Minimum progress delta required to trigger a redraw.  
+  Default: 0.01 (1%)
+
+* Progress.update_on_item_change: bool  
+  Force a redraw on every item update, even if neither the time nor progress thresholds are met.  
+  Default: True
 
 ---
 

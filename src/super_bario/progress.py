@@ -928,7 +928,7 @@ class View:
         self.min_update_progress = min_update_progress
         self.update_on_item_change = update_on_item_change
 
-        self.cache_update_interval = 60  # 1 minute
+        self.cache_update_interval = 5  # 5 seconds
         self.last_update_time: float = 0
         self.prev_progress: float = -1.0
         self._last_item: Optional[BarItem] = None

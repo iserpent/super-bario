@@ -369,7 +369,7 @@ def example_12():
             bars.append(bar)
 
         widgets = [
-            TitleWidget(f"Loading (planet)", theme=Theme.default()),
+            TitleWidget(f"Loading (custom frames)", theme=Theme.default()),
             SpinnerWidget(frames=['🌍', '🌎', '🌏'], theme=Theme.default()),
             CounterWidget(theme=Theme.default()),
             TimeWidget(show_eta=False, theme=Theme.default())

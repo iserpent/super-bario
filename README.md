@@ -1,7 +1,9 @@
-# 🎮 Super Bario
+# 🎮 Super Bario — Multi-Bar, Multi-Layout Terminal Progress for Python
 
-**Super Bario** is a powerful, layout-driven progress bar system for Python.  
-It was designed for real-world usage — multi-threaded environments, dynamic terminal widths, custom widgets, complex nested layouts, and expressive themes.
+**Super Bario** is a powerful, layout-aware, multi-bar terminal progress library for Python.
+
+It supports dynamic titles, nested layouts, multiple views per bar, themes, widgets,
+thread-safe rendering, and responsive terminal resizing.
 
 Think of it as the *Super Mario of progress bars*: fast, modular, elegant, and fun.
 
@@ -70,8 +72,8 @@ No flicker, no tearing, no overlapping output.
 ### 🔹 **Terminal Resize Handling**
 Resize your terminal — Super Bario recalculates widths and reflows layouts correctly.
 
-### 🔹 **Auto-removal on Completion**
-Completed bars can be removed automatically for log-style tasks (optional).
+### 🔹 **Completion Behavior**
+Bars may optionally be removed once completed, which is useful for log-style or long-running background tasks.
 
 ---
 
@@ -108,8 +110,8 @@ for item in progress(range(100), title="Processing"):
 for item in progress(
     range(5),
     title=lambda item: f"Loading item {item.index}: {item.value}",
-    theme=Theme.fire()),
-):
+    theme=Theme.fire()
+    ):
     time.sleep(0.1)
 ```
 
@@ -117,12 +119,12 @@ for item in progress(
 
 # 2️⃣ Queue / Collection Watching
 
-Super Bario can watch and update a bar based on the size or consumption of a queue-like object.
+Super Bario can watch and update a bar based on the size or consumption of a queue-like object.  
+Below is a minimal setup example for registering watched collections:
 
 ```python
-from super_bario import Progress, View, Bar, Theme
+from super_bario import Progress
 from queue import Queue
-import threading, time
 
 queue = Queue()
 
@@ -160,7 +162,7 @@ for i in range(100):
 ### Nested layouts
 
 ```python
-from super_bario import Bar, View, Theme, Layout, Progress
+from super_bario import Bar, View, Theme, Progress
 
 bar1 = Bar(total=100, title="Core tasks")
 bar2 = Bar(total=50, title="Subtasks")
@@ -173,13 +175,11 @@ Progress.create_column("col_1", parents=["row_1"])
 Progress.create_column("col_2", parents=["row_1"])
 
 Progress.create_row("row_2")
-
-
 Progress.add_bar(bar1, view=view1, layouts=["col_1"])
 Progress.add_bar(bar2, view=view2, layouts=["col_2"])
 
-Progress.add_layout("col_1", parents=[row_2])
-Progress.add_layout("col_2", parents=[row_2])
+Progress.add_layout("col_1", parents=["row_2"])
+Progress.add_layout("col_2", parents=["row_2"])
 
 Progress.display()
 ```
@@ -228,7 +228,7 @@ view = View(bar, widgets=[SpeedWidget()], theme=Theme.minimal())
 Progress.add_bar(bar, view)
 ```
 
-# 🔧 Create your own themed bar in one call
+# 🔧 Creating Custom Bars in One Call
 
 ```python
 bars = []
@@ -277,40 +277,40 @@ Super Bario exposes several global configuration options on the Progress class t
 
 ## Display & lifecycle
 
-* Progress.remove_on_complete: bool  
+* Progress.**remove_on_complete**: bool  
   Remove progress bars from the display once all of them are complete.  
   Default: False
 
-* Progress.force_redraw: bool  
+* Progress.**force_redraw**: bool  
   Clear the entire output before each redraw. This may cause visible flickering, but helps avoid rendering artifacts when using Unicode characters that occupy more than one terminal cell.  
   Default: False
 
-* Progress.stream: TextIO  
+* Progress.**stream**: TextIO  
   Output stream used for rendering progress bars.  
   Default: sys.stderr
 
 ## Terminal layout & resizing
 
-* Progress.terminal_padding_right: int  
+* Progress.**terminal_padding_right**: int  
   Number of characters reserved on the right side of the terminal.  
   This margin helps handle terminal resizing more safely. Setting it to 0 uses the full width, but resize handling may be less reliable.  
   Default: 20
 
 ## Update frequency & performance
 
-* Progress.watch_interval: float  
+* Progress.**watch_interval**: float  
   How often watched queues are polled, in seconds.  
   Default: 0.5
 
-* Progress.min_update_interval: float  
+* Progress.**min_update_interval**: float  
   Minimum time (in seconds) between visual updates.  
   Default: 0.1
 
-* Progress.min_update_progress: float  
+* Progress.**min_update_progress**: float  
   Minimum progress delta required to trigger a redraw.  
   Default: 0.01 (1%)
 
-* Progress.update_on_item_change: bool  
+* Progress.**update_on_item_change**: bool  
   Force a redraw on every item update, even if neither the time nor progress thresholds are met.  
   Default: True
 

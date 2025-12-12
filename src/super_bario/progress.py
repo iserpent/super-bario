@@ -2305,7 +2305,6 @@ class _ProgressMeta(type):
         # Otherwise assign normally
         return super().__setattr__(name, value)
 
-    # Keep your context managers
     def __enter__(cls):
         return _ProgressController.instance().__enter__()
 

@@ -2351,22 +2351,23 @@ def _get_terminal_size(default: Optional[os.terminal_size] = None) -> Tuple[int,
     return default
 
 
-def _detect_terminal_capability() -> TerminalCapability:
-    """Detect terminal capabilities"""
-    term = os.environ.get('TERM', '')
-    colorterm = os.environ.get('COLORTERM', '')
+def _detect_terminal_capability():
+    term = os.environ.get("TERM", "").lower()
+    colorterm = os.environ.get("COLORTERM", "").lower()
 
-    # Advanced terminals (kitty, alacritty, etc.)
-    if any(x in term.lower() for x in ['kitty', 'alacritty', 'iterm', 'wezterm']):
-        return TerminalCapability.ADVANCED
-    if 'truecolor' in colorterm or '24bit' in colorterm:
+    # Explicit override
+    if os.environ.get("SUPER_BARIO_TRUECOLOR") == "1":
         return TerminalCapability.ADVANCED
 
-    # Basic ANSI support
-    if term and term != 'dumb' and Progress.stream.isatty():
-        return TerminalCapability.BASIC
+    # Truecolor signals
+    if "truecolor" in colorterm or "24bit" in colorterm:
+        return TerminalCapability.ADVANCED
 
-    return TerminalCapability.MINIMAL
+    # xterm-256color is truecolor-capable in modern terminals
+    if term == "xterm-256color":
+        return TerminalCapability.ADVANCED
+
+    return TerminalCapability.BASIC
 
 
 def _init_terminal_width():

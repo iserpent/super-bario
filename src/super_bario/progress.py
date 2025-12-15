@@ -386,7 +386,11 @@ class BarWidget(Widget):
         if char_complete_fractions is not None:
             self.char_complete_fractions = char_complete_fractions
 
-        self.char_complete_fractions.insert(0, '')  # Add empty string for zero progress
+        if len(self.char_complete_fractions) > 1:
+            # Don't show fraction for 0 progress if multiple fractions are defined
+            # But if only one fraction is defined, use it for 0 progress as well
+            # This allows for single-character progress bars
+            self.char_complete_fractions.insert(0, ' ')
 
     def _recalculate_trimmed_parts(self,
                                    width: int,
@@ -444,10 +448,9 @@ class BarWidget(Widget):
             full_blocks = int(filled_blocks)
             partial_block_index = math.ceil((filled_blocks - full_blocks) * (len(self.char_complete_fractions) - 1))
 
-            # Only add partial block if there's actual progress beyond full blocks
-            has_partial = full_blocks < inner_width and partial_block_index > 0
+            has_partial = full_blocks < inner_width
             partial_char = self.char_complete_fractions[partial_block_index] if has_partial and self.char_complete_fractions else ''
-            incomplete_count = inner_width - full_blocks - (1 if has_partial else 0)
+            incomplete_count = inner_width - full_blocks - len(partial_char)
 
             content = (char_start +
                        self.char_complete * full_blocks +

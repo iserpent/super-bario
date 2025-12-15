@@ -512,13 +512,12 @@ class TimeWidget(Widget):
     _render_priority = 20
 
     def __init__(self, show_eta: bool = True, show_elapsed: bool = True, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
-        self.show_eta = show_eta
-        self.show_elapsed = show_elapsed
-        self.reset(show_eta=show_eta, show_elapsed=show_elapsed, theme=theme, use_unicode=use_unicode)
+        self.reset(show_eta=show_eta, show_elapsed=show_elapsed, progress=0.0, theme=theme, use_unicode=use_unicode)
 
     def reset(self,
               show_eta: Optional[bool] = None,
               show_elapsed: Optional[bool] = None,
+              progress: Optional[float] = None,
               theme: Optional[Theme] = None,
               use_unicode: Optional[bool] = None):
         super().reset(theme=theme, use_unicode=use_unicode)
@@ -526,6 +525,10 @@ class TimeWidget(Widget):
             self.show_eta = show_eta
         if show_elapsed is not None:
             self.show_elapsed = show_elapsed
+        if progress is not None:
+            self.progress = progress
+        self.eta: Optional[float] = None
+        self.eta_updated: datetime = datetime.now()
 
     def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
         parts = []
@@ -535,9 +538,14 @@ class TimeWidget(Widget):
             parts.append(f'{elapsed}')
 
         if self.show_eta and bar.progress < 1.0:
-            eta = bar.estimated_time()
-            if eta:
-                parts.append(f'ETA {eta}')
+            if self.progress != bar.progress:
+                self.progress = bar.progress
+                self.eta = bar.estimated_time()
+                self.eta_updated = datetime.now()
+            if self.eta:
+                seconds = max(0, self.eta - (datetime.now() - self.eta_updated).total_seconds())
+                remaining = self._format_seconds(seconds)
+                parts.append(f'ETA {remaining}')
 
         prepared = ' '.join(parts)
         prepared = self._trim(prepared, width)
@@ -546,8 +554,8 @@ class TimeWidget(Widget):
         return (prepared, rendered)
 
     @staticmethod
-    def _format_seconds(seconds: int) -> str:
-        hours, remainder = divmod(seconds, 3600)
+    def _format_seconds(seconds: float) -> str:
+        hours, remainder = divmod(int(seconds), 3600)
         minutes, seconds = divmod(remainder, 60)
         return '{:02d}:{:02d}:{:02d}'.format(hours, minutes, seconds)
 
@@ -736,6 +744,11 @@ class Bar:
             self.update(self.total)
         return False
 
+    def start(self):
+        """Start the progress bar"""
+        if self.start_time is None:
+            self.start_time = datetime.now()
+
     def set_controller(self, controller: Optional['_ProgressController']):
         """Set the progress controller"""
         self.controller_ref = weakref.ref(controller) if controller else None
@@ -825,28 +838,29 @@ class Bar:
         """Set current item being processed"""
         self._item = item
 
-    def elapsed_time(self) -> int:
+    def elapsed_time(self) -> float:
         """Get elapsed time in seconds"""
         if self.start_time is None:
-            return 0
+            return 0.0
         if self.progress < 1.0:
-            self._elapsed_time = int((datetime.now() - self.start_time).total_seconds())
+            self._elapsed_time = (datetime.now() - self.start_time).total_seconds()
         return self._elapsed_time
 
-    def estimated_time(self) -> Optional[str]:
+    def estimated_time(self) -> Optional[float]:
         """Calculate and format estimated time remaining"""
         if self.progress == 0.0 or self.total == 0:
             return None
 
-        elapsed = self.elapsed_time()
-        seconds = int(elapsed / self.progress * (1.0 - self.progress))
+        if self.progress >= 1.0:
+            return 0.0
 
-        if seconds < 0:
+        elapsed = self.elapsed_time()
+        eta = elapsed / self.progress * (1.0 - self.progress)
+
+        if eta < 0.0:
             return None
 
-        hours, remainder = divmod(seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return '{:02d}:{:02d}:{:02d}'.format(hours, minutes, seconds)
+        return eta
 
     def get_indent(self) -> int:
         """Get current indentation level"""
@@ -2437,6 +2451,7 @@ class ProgressContext:
             self.bar = Progress.create_bar(total=total, title=title, layouts=layouts, **kwargs)
 
     def __enter__(self):
+        self.bar.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -2492,6 +2507,6 @@ def progress(iterable,
         for index, item in enumerate(iterable, 1):
             bar_item = BarItem(index, item)
             if index == 1:
-                ctx.update(index, item=bar_item)
+                ctx.update(0, item=bar_item)
             yield item
             ctx.update(index, item=bar_item)

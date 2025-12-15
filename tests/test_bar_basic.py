@@ -20,7 +20,7 @@ def test_elapsed_and_eta():
     with bar:
         bar.increment()
         time.sleep(0.01)
-        assert isinstance(bar.elapsed_time(), int)
+        assert isinstance(bar.elapsed_time(), float)
         eta = bar.estimated_time()
         if eta is not None:
-            assert isinstance(eta, str)
+            assert isinstance(eta, float)

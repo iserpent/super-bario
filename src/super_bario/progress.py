@@ -382,6 +382,7 @@ class BarWidget(Widget):
 
         if char_complete is not None:
             self.char_complete = char_complete
+            self.char_complete_fractions = []
 
         if char_complete_fractions is not None:
             self.char_complete_fractions = char_complete_fractions

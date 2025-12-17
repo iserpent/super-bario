@@ -1945,6 +1945,7 @@ class _ProgressController:
             if layout_parents & layout_descendants:
                 raise ValueError(f"Cannot add layout '{name}' to parent '{parent}' as it would create a circular reference.")
 
+        for parent in parents:
             _layout.add_parent(parent)
 
             self._registered_layouts[parent].append(_layout)

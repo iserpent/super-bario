@@ -58,7 +58,8 @@ __all__ = [
     "CounterWidget",
     "SpinnerWidget",
     "RateWidget",
-    "TimeWidget",
+    "ElapsedTimeWidget",
+    "EstimatedTimeWidget",
 ]
 
 logger = logging.getLogger("super-bario")
@@ -575,15 +576,67 @@ class PercentageWidget(Widget):
         return (prepared, rendered)
 
 
-class TimeWidget(Widget):
+class _TimeWidget(Widget):
     """Widget displaying time information"""
+
+    @staticmethod
+    def _format_seconds(seconds: float) -> str:
+        hours, remainder = divmod(int(seconds), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return "{:02d}:{:02d}:{:02d}".format(hours, minutes, seconds)
+
+
+class ElapsedTimeWidget(_TimeWidget):
+    """Widget displaying elapsed time"""
 
     _render_priority = 20
 
     def __init__(
         self,
-        show_eta: bool = True,
-        show_elapsed: bool = True,
+        label_elapsed: Optional[str] = None,
+        theme: Optional[Theme] = None,
+        use_unicode: Optional[bool] = None,
+    ):
+        self.reset(
+            label=label_elapsed,
+            theme=theme,
+            use_unicode=use_unicode,
+        )
+
+    def reset(
+        self,
+        label: Optional[str] = None,
+        theme: Optional[Theme] = None,
+        use_unicode: Optional[bool] = None,
+    ):
+        super().reset(theme=theme, use_unicode=use_unicode)
+        if label is not None:
+            self.label = label
+        else:
+            self.label = "⏱️" if self.use_unicode else ""
+
+    def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
+        parts = []
+        if self.label:
+            parts.append(self.label)
+        parts.append(self._format_seconds(bar.elapsed_time()))
+
+        prepared = " ".join(parts)
+        prepared = self._trim(prepared, width)
+
+        rendered = f"{self.theme.time_color}{prepared}{Colors.RESET}"
+
+        return (prepared, rendered)
+
+
+class EstimatedTimeWidget(_TimeWidget):
+    """Widget displaying estimated time"""
+
+    _render_priority = 15
+
+    def __init__(
+        self,
+        label_estimated: Optional[str] = None,
         spinner_style: Optional[str] = None,
         spinner_frames: Optional[List[str]] = None,
         theme: Optional[Theme] = None,
@@ -591,8 +644,7 @@ class TimeWidget(Widget):
     ):
         self.spinner_widget = SpinnerWidget()
         self.reset(
-            show_eta=show_eta,
-            show_elapsed=show_elapsed,
+            label=label_estimated,
             spinner_style=spinner_style,
             spinner_frames=spinner_frames,
             progress=0.0,
@@ -602,8 +654,7 @@ class TimeWidget(Widget):
 
     def reset(
         self,
-        show_eta: Optional[bool] = None,
-        show_elapsed: Optional[bool] = None,
+        label: Optional[str] = None,
         spinner_style: Optional[str] = None,
         spinner_frames: Optional[List[str]] = None,
         progress: Optional[float] = None,
@@ -611,10 +662,10 @@ class TimeWidget(Widget):
         use_unicode: Optional[bool] = None,
     ):
         super().reset(theme=theme, use_unicode=use_unicode)
-        if show_eta is not None:
-            self.show_eta = show_eta
-        if show_elapsed is not None:
-            self.show_elapsed = show_elapsed
+        if label is not None:
+            self.label = label
+        else:
+            self.label = "≈⏱️" if self.use_unicode else "ETA"
         if progress is not None:
             self.progress = progress
         self.eta: Optional[float] = None
@@ -629,11 +680,7 @@ class TimeWidget(Widget):
     def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
         parts = []
 
-        if self.show_elapsed:
-            elapsed = self._format_seconds(bar.elapsed_time())
-            parts.append(f"{elapsed}")
-
-        if self.show_eta and bar.progress < 1.0:
+        if bar.progress < 1.0:
             if self.progress != bar.progress:
                 self.progress = bar.progress
                 self.eta = bar.estimated_time()
@@ -646,19 +693,15 @@ class TimeWidget(Widget):
                 remaining = self._format_seconds(seconds)
             else:
                 remaining = self.spinner_widget.render(bar, width=(width))[0]
-            parts.append(f"ETA {remaining}")
+            if self.label:
+                parts.append(self.label)
+            parts.append(remaining)
 
         prepared = " ".join(parts)
         prepared = self._trim(prepared, width)
-
         rendered = f"{self.theme.time_color}{prepared}{Colors.RESET}"
-        return (prepared, rendered)
 
-    @staticmethod
-    def _format_seconds(seconds: float) -> str:
-        hours, remainder = divmod(int(seconds), 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return "{:02d}:{:02d}:{:02d}".format(hours, minutes, seconds)
+        return (prepared, rendered)
 
 
 class CounterWidget(Widget):
@@ -1117,7 +1160,12 @@ class View:
                             theme=self.theme, use_unicode=self.use_unicode
                         ),
                         CounterWidget(theme=self.theme, use_unicode=self.use_unicode),
-                        TimeWidget(theme=self.theme, use_unicode=self.use_unicode),
+                        ElapsedTimeWidget(
+                            theme=self.theme, use_unicode=self.use_unicode
+                        ),
+                        EstimatedTimeWidget(
+                            theme=self.theme, use_unicode=self.use_unicode
+                        ),
                     ],
                 )
             )
@@ -1128,10 +1176,8 @@ class View:
                     [
                         SpinnerWidget(theme=self.theme, use_unicode=self.use_unicode),
                         CounterWidget(theme=self.theme, use_unicode=self.use_unicode),
-                        TimeWidget(
-                            show_eta=False,
-                            theme=self.theme,
-                            use_unicode=self.use_unicode,
+                        ElapsedTimeWidget(
+                            theme=self.theme, use_unicode=self.use_unicode
                         ),
                     ],
                 )
@@ -2007,14 +2053,24 @@ class _ProgressController:
             key: kwargs[key] for key in counter_widget_args if key in kwargs
         }
 
-        time_widget_args = [
-            "show_eta",
-            "show_elapsed",
+        elapsed_time_widget_args = [
+            "label_elapsed",
             "theme",
             "use_unicode",
         ]
-        time_widget_config = {
-            key: kwargs[key] for key in time_widget_args if key in kwargs
+        elapsed_time_widget_config = {
+            key: kwargs[key] for key in elapsed_time_widget_args if key in kwargs
+        }
+
+        estimated_time_widget_args = [
+            "label_estimated",
+            "spinner_style",
+            "spinner_frames",
+            "theme",
+            "use_unicode",
+        ]
+        estimated_time_widget_config = {
+            key: kwargs[key] for key in estimated_time_widget_args if key in kwargs
         }
 
         view_args = [
@@ -2037,7 +2093,8 @@ class _ProgressController:
             BarWidget(**bar_widget_config),
             PercentageWidget(**percentage_widget_config),
             CounterWidget(**counter_widget_config),
-            TimeWidget(**time_widget_config),
+            ElapsedTimeWidget(**elapsed_time_widget_config),
+            EstimatedTimeWidget(**estimated_time_widget_config),
         ]
 
         view_config["bar"] = bar
@@ -2087,7 +2144,7 @@ class _ProgressController:
                 total=max,
                 layouts=layouts,
                 theme=Theme.load(),
-                exclude_widgets=set([TimeWidget]),
+                exclude_widgets=set([ElapsedTimeWidget, EstimatedTimeWidget]),
             )
 
         self._watched_bars.add(bar)

@@ -584,12 +584,17 @@ class TimeWidget(Widget):
         self,
         show_eta: bool = True,
         show_elapsed: bool = True,
+        spinner_style: Optional[str] = None,
+        spinner_frames: Optional[List[str]] = None,
         theme: Optional[Theme] = None,
         use_unicode: Optional[bool] = None,
     ):
+        self.spinner_widget = SpinnerWidget()
         self.reset(
             show_eta=show_eta,
             show_elapsed=show_elapsed,
+            spinner_style=spinner_style,
+            spinner_frames=spinner_frames,
             progress=0.0,
             theme=theme,
             use_unicode=use_unicode,
@@ -599,6 +604,8 @@ class TimeWidget(Widget):
         self,
         show_eta: Optional[bool] = None,
         show_elapsed: Optional[bool] = None,
+        spinner_style: Optional[str] = None,
+        spinner_frames: Optional[List[str]] = None,
         progress: Optional[float] = None,
         theme: Optional[Theme] = None,
         use_unicode: Optional[bool] = None,
@@ -612,6 +619,12 @@ class TimeWidget(Widget):
             self.progress = progress
         self.eta: Optional[float] = None
         self.eta_updated: datetime = datetime.now()
+        self.spinner_widget.reset(
+            style=spinner_style or "dots",
+            frames=spinner_frames,
+            theme=self.theme,
+            use_unicode=self.use_unicode,
+        )
 
     def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
         parts = []
@@ -625,12 +638,15 @@ class TimeWidget(Widget):
                 self.progress = bar.progress
                 self.eta = bar.estimated_time()
                 self.eta_updated = datetime.now()
+            remaining = ""
             if self.eta:
                 seconds = max(
                     0, self.eta - (datetime.now() - self.eta_updated).total_seconds()
                 )
                 remaining = self._format_seconds(seconds)
-                parts.append(f"ETA {remaining}")
+            else:
+                remaining = self.spinner_widget.render(bar, width=(width))[0]
+            parts.append(f"ETA {remaining}")
 
         prepared = " ".join(parts)
         prepared = self._trim(prepared, width)
@@ -713,21 +729,21 @@ class SpinnerWidget(Widget):
             self.frames = self.FRAMES_ARROWS
         elif style == "bouncing":
             self.frames = self.FRAMES_BOUNCING
-        else:
+        elif style == "snake":
             self.frames = self.FRAMES_SNAKE
+        else:
+            raise ValueError(f"Unknown spinner style: {style}")
 
         self.frame_idx = 0
 
     def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
-        if bar.total == 0:
-            with self._lock:
-                prepared = self.frames[self.frame_idx % len(self.frames)]
-                self.frame_idx += 1
+        with self._lock:
+            prepared = self.frames[self.frame_idx % len(self.frames)]
+            self.frame_idx += 1
 
-            prepared = self._trim(prepared, width)
-            rendered = f"{self.theme.bar_complete_color}{prepared}{Colors.RESET}"
-            return (prepared, rendered)
-        return ("", "")
+        prepared = self._trim(prepared, width)
+        rendered = f"{self.theme.bar_complete_color}{prepared}{Colors.RESET}"
+        return (prepared, rendered)
 
 
 class RateWidget(Widget):

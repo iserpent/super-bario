@@ -24,44 +24,44 @@ from datetime import datetime
 from dataclasses import dataclass
 from queue import Queue
 from typing import (
-        TYPE_CHECKING,
-        Protocol,
-        Optional,
-        Tuple,
-        Set,
-        List,
-        Dict,
-        Callable,
-        Any,
-        Iterator,
-        Sized,
-        Union,
-        TextIO,
+    TYPE_CHECKING,
+    Protocol,
+    Optional,
+    Tuple,
+    Set,
+    List,
+    Dict,
+    Callable,
+    Any,
+    Iterator,
+    Sized,
+    Union,
+    TextIO,
 )
 from abc import ABC, abstractmethod
 from enum import Enum
 import logging
 
 __all__ = [
-    'progress',
-    'Progress',
-    'ProgressContext',
-    'Bar',
-    'BarItem',
-    'View',
-    'Theme',
-    'Colors',
-    'Widget',
-    'TitleWidget',
-    'BarWidget',
-    'PercentageWidget',
-    'CounterWidget',
-    'SpinnerWidget',
-    'RateWidget',
-    'TimeWidget',
+    "progress",
+    "Progress",
+    "ProgressContext",
+    "Bar",
+    "BarItem",
+    "View",
+    "Theme",
+    "Colors",
+    "Widget",
+    "TitleWidget",
+    "BarWidget",
+    "PercentageWidget",
+    "CounterWidget",
+    "SpinnerWidget",
+    "RateWidget",
+    "TimeWidget",
 ]
 
-logger = logging.getLogger('super-bario')
+logger = logging.getLogger("super-bario")
 
 _sigwinch_pending = False
 _terminal_width = 0
@@ -74,66 +74,73 @@ _sigwinch_write_fd = None
 # Terminal utilities
 # ============================================================================
 
+
 class TerminalCapability(Enum):
     """Terminal capability levels"""
+
     MINIMAL = 1  # No ANSI support
-    BASIC = 2    # Basic ANSI colors
-    ADVANCED = 3 # Full Unicode and colors
+    BASIC = 2  # Basic ANSI colors
+    ADVANCED = 3  # Full Unicode and colors
 
 
 class Colors:
     """ANSI color codes and utilities"""
+
     # Reset
-    RESET = '\033[0m'
+    RESET = "\033[0m"
 
     # Basic colors (3/4 bit)
-    BLACK = '\033[30m'
-    RED = '\033[31m'
-    GREEN = '\033[32m'
-    YELLOW = '\033[33m'
-    BLUE = '\033[34m'
-    MAGENTA = '\033[35m'
-    CYAN = '\033[36m'
-    WHITE = '\033[37m'
+    BLACK = "\033[30m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
 
     # Bright colors
-    BRIGHT_BLACK = '\033[90m'
-    BRIGHT_RED = '\033[91m'
-    BRIGHT_GREEN = '\033[92m'
-    BRIGHT_YELLOW = '\033[93m'
-    BRIGHT_BLUE = '\033[94m'
-    BRIGHT_MAGENTA = '\033[95m'
-    BRIGHT_CYAN = '\033[96m'
-    BRIGHT_WHITE = '\033[97m'
+    BRIGHT_BLACK = "\033[90m"
+    BRIGHT_RED = "\033[91m"
+    BRIGHT_GREEN = "\033[92m"
+    BRIGHT_YELLOW = "\033[93m"
+    BRIGHT_BLUE = "\033[94m"
+    BRIGHT_MAGENTA = "\033[95m"
+    BRIGHT_CYAN = "\033[96m"
+    BRIGHT_WHITE = "\033[97m"
 
     # Background colors
-    BG_BLACK = '\033[40m'
-    BG_RED = '\033[41m'
-    BG_GREEN = '\033[42m'
-    BG_YELLOW = '\033[43m'
-    BG_BLUE = '\033[44m'
-    BG_MAGENTA = '\033[45m'
-    BG_CYAN = '\033[46m'
-    BG_WHITE = '\033[47m'
+    BG_BLACK = "\033[40m"
+    BG_RED = "\033[41m"
+    BG_GREEN = "\033[42m"
+    BG_YELLOW = "\033[43m"
+    BG_BLUE = "\033[44m"
+    BG_MAGENTA = "\033[45m"
+    BG_CYAN = "\033[46m"
+    BG_WHITE = "\033[47m"
 
     # Styles
-    BOLD = '\033[1m'
-    DIM = '\033[2m'
-    ITALIC = '\033[3m'
-    UNDERLINE = '\033[4m'
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    ITALIC = "\033[3m"
+    UNDERLINE = "\033[4m"
 
     @staticmethod
     def rgb(r: int, g: int, b: int) -> str:
         """Create 24-bit RGB color"""
-        return f'\033[38;2;{r};{g};{b}m'
+        return f"\033[38;2;{r};{g};{b}m"
 
     @staticmethod
     def bg_rgb(r: int, g: int, b: int) -> str:
         """Create 24-bit RGB background color"""
-        return f'\033[48;2;{r};{g};{b}m'
+        return f"\033[48;2;{r};{g};{b}m"
 
     @staticmethod
-    def gradient(progress: float, start_color: Tuple[int, int, int], end_color: Tuple[int, int, int]) -> str:
+    def gradient(
+        progress: float,
+        start_color: Tuple[int, int, int],
+        end_color: Tuple[int, int, int],
+    ) -> str:
         """Generate gradient color based on progress (0.0 to 1.0)"""
         r = int(start_color[0] + (end_color[0] - start_color[0]) * progress)
         g = int(start_color[1] + (end_color[1] - start_color[1]) * progress)
@@ -144,16 +151,18 @@ class Colors:
 class Theme:
     """Color theme for progress bars"""
 
-    def __init__(self,
-                 title_color: str = Colors.CYAN,
-                 bar_complete_color: str = Colors.GREEN,
-                 bar_incomplete_color: str = Colors.BRIGHT_BLACK,
-                 percentage_color: str = Colors.BRIGHT_WHITE,
-                 time_color: str = Colors.YELLOW,
-                 counter_color: str = Colors.BLUE,
-                 use_gradient: bool = False,
-                 gradient_start: Tuple[int, int, int] = (255, 0, 0),  # Red
-                 gradient_end: Tuple[int, int, int] = (0, 255, 0)):    # Green
+    def __init__(
+        self,
+        title_color: str = Colors.CYAN,
+        bar_complete_color: str = Colors.GREEN,
+        bar_incomplete_color: str = Colors.BRIGHT_BLACK,
+        percentage_color: str = Colors.BRIGHT_WHITE,
+        time_color: str = Colors.YELLOW,
+        counter_color: str = Colors.BLUE,
+        use_gradient: bool = False,
+        gradient_start: Tuple[int, int, int] = (255, 0, 0),  # Red
+        gradient_end: Tuple[int, int, int] = (0, 255, 0),
+    ):  # Green
         self.title_color = title_color
         self.bar_complete_color = bar_complete_color
         self.bar_incomplete_color = bar_incomplete_color
@@ -173,13 +182,13 @@ class Theme:
     def minimal():
         """Theme for minimal terminals (no colors)"""
         return Theme(
-            title_color='',
-            bar_complete_color='',
-            bar_incomplete_color='',
-            percentage_color='',
-            time_color='',
-            counter_color='',
-            use_gradient=False
+            title_color="",
+            bar_complete_color="",
+            bar_incomplete_color="",
+            percentage_color="",
+            time_color="",
+            counter_color="",
+            use_gradient=False,
         )
 
     @staticmethod
@@ -190,7 +199,7 @@ class Theme:
             bar_complete_color=Colors.GREEN,
             percentage_color=Colors.BRIGHT_GREEN,
             time_color=Colors.GREEN,
-            counter_color=Colors.BRIGHT_GREEN
+            counter_color=Colors.BRIGHT_GREEN,
         )
 
     @staticmethod
@@ -203,8 +212,8 @@ class Theme:
             time_color=Colors.YELLOW,
             counter_color=Colors.BRIGHT_YELLOW,
             use_gradient=True,
-            gradient_start=(255, 100, 0),   # Orange
-            gradient_end=(255, 50, 50)      # Red
+            gradient_start=(255, 100, 0),  # Orange
+            gradient_end=(255, 50, 50),  # Red
         )
 
     @staticmethod
@@ -212,8 +221,8 @@ class Theme:
         """Load theme with gradient"""
         return Theme(
             use_gradient=True,
-            gradient_start=(50, 255, 50),   # Green
-            gradient_end=(255, 50, 50)      # Red
+            gradient_start=(50, 255, 50),  # Green
+            gradient_end=(255, 50, 50),  # Red
         )
 
 
@@ -221,8 +230,10 @@ class Theme:
 # Widget System
 # ============================================================================
 
+
 class Widget(ABC):
     """Base class for progress bar widgets"""
+
     _render_priority: int = 100
 
     @property
@@ -230,129 +241,156 @@ class Widget(ABC):
         """Render priority for widget ordering (lower is rendered first)"""
         return self._render_priority
 
-    def reset(self, *args, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None, **kwargs):
+    def reset(
+        self,
+        *args,
+        theme: Optional[Theme] = None,
+        use_unicode: Optional[bool] = None,
+        **kwargs,
+    ):
         """Reset any internal state"""
         if theme is not None:
             self.theme = theme
-        elif not hasattr(self, 'theme'):
+        elif not hasattr(self, "theme"):
             self.theme = Theme.default()
 
         # Auto-detect unicode support if not specified
         if use_unicode is None:
             capability = _detect_terminal_capability()
-            use_unicode = capability in [TerminalCapability.BASIC, TerminalCapability.ADVANCED]
+            use_unicode = capability in [
+                TerminalCapability.BASIC,
+                TerminalCapability.ADVANCED,
+            ]
 
         self.use_unicode = use_unicode
 
     @abstractmethod
-    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
+    def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
         """Render the widget to a raw and styled string"""
         pass
 
     def _trim(self, text: str, width: int) -> str:
         """Trim text to fit within the specified width"""
         if width <= 0:
-            return ''
+            return ""
 
         if len(text) <= width:
             return text
 
         if self.use_unicode:
-            text = text[:max(0, width-1)]
-            text += '…'
+            text = text[: max(0, width - 1)]
+            text += "…"
         else:
-            text = text[:max(0, width-3)]
-            text += '.' * (width - len(text))
+            text = text[: max(0, width - 3)]
+            text += "." * (width - len(text))
 
         return text
 
 
 class TitleWidget(Widget):
     """Widget displaying the title/description"""
+
     _render_priority = 40
 
-    def __init__(self, title: Union[str, Callable[[Any], str]] = "Progress", theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
+    def __init__(
+        self,
+        title: Union[str, Callable[[Any], str]] = "Progress",
+        theme: Optional[Theme] = None,
+        use_unicode: Optional[bool] = None,
+    ):
         self.title_fn: Optional[Callable[[Any], str]] = None
         self._width = 0
         self.reset(title=title, theme=theme, use_unicode=use_unicode)
 
-    def reset(self, title: Union[str, Callable[[Any], str], None] = None, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
+    def reset(
+        self,
+        title: Union[str, Callable[[Any], str], None] = None,
+        theme: Optional[Theme] = None,
+        use_unicode: Optional[bool] = None,
+    ):
         super().reset(theme=theme, use_unicode=use_unicode)
         if title is not None:
             if callable(title):
                 self.title_fn = title
-                self._title = ''
+                self._title = ""
                 self._width = 0
             else:
                 self._title = title
                 self._width = len(str(title))
 
-    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
+    def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
         prepared = self._title
 
         if bar.item is not None and self.title_fn:
             prepared = self.title_fn(bar.item)
 
         prepared = self._trim(prepared, width)
-        rendered = f'{self.theme.title_color}{prepared}{Colors.RESET}'
+        rendered = f"{self.theme.title_color}{prepared}{Colors.RESET}"
 
         return (prepared, rendered)
 
 
 class BarWidget(Widget):
     """Widget displaying the actual progress bar"""
+
     _render_priority = 50
 
-    def __init__(self,
-                 use_unicode: Optional[bool] = None,
-                 theme: Optional[Theme] = None,
-                 char_start_incomplete: Optional[str] = None,
-                 char_start_progress: Optional[str] = None,
-                 char_start_complete: Optional[str] = None,
-                 char_end_incomplete: Optional[str] = None,
-                 char_end_progress: Optional[str] = None,
-                 char_end_complete: Optional[str] = None,
-                 char_incomplete: Optional[str] = None,
-                 char_complete: Optional[str] = None,
-                 char_complete_fractions: Optional[List[str]] = None):
-        self.reset(use_unicode=use_unicode,
-                   theme=theme,
-                   char_start_incomplete=char_start_incomplete,
-                   char_start_progress=char_start_progress,
-                   char_start_complete=char_start_complete,
-                   char_end_incomplete=char_end_incomplete,
-                   char_end_progress=char_end_progress,
-                   char_end_complete=char_end_complete,
-                   char_incomplete=char_incomplete,
-                   char_complete=char_complete,
-                   char_complete_fractions=char_complete_fractions)
+    def __init__(
+        self,
+        use_unicode: Optional[bool] = None,
+        theme: Optional[Theme] = None,
+        char_start_incomplete: Optional[str] = None,
+        char_start_progress: Optional[str] = None,
+        char_start_complete: Optional[str] = None,
+        char_end_incomplete: Optional[str] = None,
+        char_end_progress: Optional[str] = None,
+        char_end_complete: Optional[str] = None,
+        char_incomplete: Optional[str] = None,
+        char_complete: Optional[str] = None,
+        char_complete_fractions: Optional[List[str]] = None,
+    ):
+        self.reset(
+            use_unicode=use_unicode,
+            theme=theme,
+            char_start_incomplete=char_start_incomplete,
+            char_start_progress=char_start_progress,
+            char_start_complete=char_start_complete,
+            char_end_incomplete=char_end_incomplete,
+            char_end_progress=char_end_progress,
+            char_end_complete=char_end_complete,
+            char_incomplete=char_incomplete,
+            char_complete=char_complete,
+            char_complete_fractions=char_complete_fractions,
+        )
 
-    def reset(self,
-              use_unicode: Optional[bool] = None,
-              theme: Optional[Theme] = None,
-              char_start_incomplete: Optional[str] = None,
-              char_start_progress: Optional[str] = None,
-              char_start_complete: Optional[str] = None,
-              char_end_incomplete: Optional[str] = None,
-              char_end_progress: Optional[str] = None,
-              char_end_complete: Optional[str] = None,
-              char_incomplete: Optional[str] = None,
-              char_complete: Optional[str] = None,
-              char_complete_fractions: Optional[List[str]] = None):
+    def reset(
+        self,
+        use_unicode: Optional[bool] = None,
+        theme: Optional[Theme] = None,
+        char_start_incomplete: Optional[str] = None,
+        char_start_progress: Optional[str] = None,
+        char_start_complete: Optional[str] = None,
+        char_end_incomplete: Optional[str] = None,
+        char_end_progress: Optional[str] = None,
+        char_end_complete: Optional[str] = None,
+        char_incomplete: Optional[str] = None,
+        char_complete: Optional[str] = None,
+        char_complete_fractions: Optional[List[str]] = None,
+    ):
         super().reset(theme=theme, use_unicode=use_unicode)
 
         if self.use_unicode:
-            self.char_start_incomplete = '▕'
-            self.char_end_incomplete = '▏'
-            self.char_incomplete = ' '
-            self.char_complete = '█'
-            self.char_complete_fractions = ['▏', '▎', '▍', '▌', '▋', '▊', '▉', '█']
+            self.char_start_incomplete = "▕"
+            self.char_end_incomplete = "▏"
+            self.char_incomplete = " "
+            self.char_complete = "█"
+            self.char_complete_fractions = ["▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"]
         else:
-            self.char_start_incomplete = '['
-            self.char_end_incomplete = ']'
-            self.char_incomplete = ' '
-            self.char_complete = '#'
-            self.char_complete_fractions = ['#']
+            self.char_start_incomplete = "["
+            self.char_end_incomplete = "]"
+            self.char_incomplete = " "
+            self.char_complete = "#"
+            self.char_complete_fractions = ["#"]
 
         if char_start_incomplete is not None:
             self.char_start_incomplete = char_start_incomplete
@@ -391,31 +429,41 @@ class BarWidget(Widget):
             # Don't show fraction for 0 progress if multiple fractions are defined
             # But if only one fraction is defined, use it for 0 progress as well
             # This allows for single-character progress bars
-            self.char_complete_fractions.insert(0, ' ')
+            self.char_complete_fractions.insert(0, " ")
 
-    def _recalculate_trimmed_parts(self,
-                                   width: int,
-                                   filled_width: int,
-                                   trimmed_content: str,
-                                   complete_part: str,
-                                   incomplete_part: str):
-        trimmed_width = len(trimmed_content) - len(self.char_start_incomplete) - len(self.char_end_incomplete)
+    def _recalculate_trimmed_parts(
+        self,
+        width: int,
+        filled_width: int,
+        trimmed_content: str,
+        complete_part: str,
+        incomplete_part: str,
+    ):
+        trimmed_width = (
+            len(trimmed_content)
+            - len(self.char_start_incomplete)
+            - len(self.char_end_incomplete)
+        )
         if trimmed_width < width:
             # Adjust parts to fit trimmed width
             if filled_width > trimmed_width:
                 complete_part = self.char_complete * trimmed_width
-                incomplete_part = ''
+                incomplete_part = ""
             else:
                 complete_part = self.char_complete * filled_width
                 remaining_width = trimmed_width - filled_width
                 incomplete_part = self.char_incomplete * remaining_width
         return complete_part, incomplete_part
 
-    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
+    def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
         progress_ratio = min(1.0, bar.progress)
 
-        inner_width_with_chars_progress = width - len(self.char_start_progress) - len(self.char_end_progress)
-        filled_width_with_chars_progress = int(inner_width_with_chars_progress * progress_ratio)
+        inner_width_with_chars_progress = (
+            width - len(self.char_start_progress) - len(self.char_end_progress)
+        )
+        filled_width_with_chars_progress = int(
+            inner_width_with_chars_progress * progress_ratio
+        )
 
         if progress_ratio >= 1.0:
             char_start = self.char_start_complete
@@ -431,15 +479,18 @@ class BarWidget(Widget):
 
         if bar.total == 0:
             # Indeterminate progress
-            content = char_start + '-' * inner_width + char_end
+            content = char_start + "-" * inner_width + char_end
             content = self._trim(content, width)
-            return (content, f'{self.theme.bar_incomplete_color}{content}{Colors.RESET}')
+            return (
+                content,
+                f"{self.theme.bar_incomplete_color}{content}{Colors.RESET}",
+            )
 
         # Get color for the bar
         if self.theme.use_gradient:
-            bar_color = Colors.gradient(progress_ratio,
-                                        self.theme.gradient_start,
-                                        self.theme.gradient_end)
+            bar_color = Colors.gradient(
+                progress_ratio, self.theme.gradient_start, self.theme.gradient_end
+            )
         else:
             bar_color = self.theme.bar_complete_color
 
@@ -447,20 +498,28 @@ class BarWidget(Widget):
             # Smooth progress with partial blocks
             filled_blocks = progress_ratio * inner_width
             full_blocks = int(filled_blocks)
-            partial_block_index = math.ceil((filled_blocks - full_blocks) * (len(self.char_complete_fractions) - 1))
+            partial_block_index = math.ceil(
+                (filled_blocks - full_blocks) * (len(self.char_complete_fractions) - 1)
+            )
 
             has_partial = full_blocks < inner_width
-            partial_char = self.char_complete_fractions[partial_block_index] if has_partial and self.char_complete_fractions else ''
+            partial_char = (
+                self.char_complete_fractions[partial_block_index]
+                if has_partial and self.char_complete_fractions
+                else ""
+            )
             incomplete_count = inner_width - full_blocks - len(partial_char)
 
-            content = (char_start +
-                       self.char_complete * full_blocks +
-                       partial_char +
-                       self.char_incomplete * incomplete_count +
-                       char_end)
+            content = (
+                char_start
+                + self.char_complete * full_blocks
+                + partial_char
+                + self.char_incomplete * incomplete_count
+                + char_end
+            )
             content = self._trim(content, width)
 
-            return (content, f'{bar_color}{content}{Colors.RESET}')
+            return (content, f"{bar_color}{content}{Colors.RESET}")
 
         else:
             # Classic style with complete/incomplete characters
@@ -469,7 +528,7 @@ class BarWidget(Widget):
             if progress_ratio >= 1.0:
                 content = char_start + self.char_complete * inner_width + char_end
                 content = self._trim(content, width)
-                return (content, f'{bar_color}{content}{Colors.RESET}')
+                return (content, f"{bar_color}{content}{Colors.RESET}")
             else:
                 complete_part = self.char_complete * filled_width
                 incomplete_part = self.char_incomplete * (inner_width - filled_width)
@@ -477,7 +536,7 @@ class BarWidget(Widget):
                 trimmed_content = self._trim(content, width)
 
                 if not trimmed_content:
-                    return ('', '')
+                    return ("", "")
 
                 # Recalculate parts after trimming
                 complete_part, incomplete_part = self._recalculate_trimmed_parts(
@@ -485,45 +544,65 @@ class BarWidget(Widget):
                     filled_width,
                     trimmed_content,
                     complete_part,
-                    incomplete_part
+                    incomplete_part,
                 )
 
-                rendered_complete_part = f'{bar_color}{complete_part}{Colors.RESET}'
-                rendered_incomplete_part = f'{self.theme.bar_incomplete_color}{incomplete_part}{Colors.RESET}'
-                start_bracket = char_start if len(trimmed_content) > 1 else ''
-                end_bracket = char_end if len(trimmed_content) > 1 else ''
-                rendered_content = f'{start_bracket}{rendered_complete_part}{rendered_incomplete_part}{end_bracket}'
+                rendered_complete_part = f"{bar_color}{complete_part}{Colors.RESET}"
+                rendered_incomplete_part = (
+                    f"{self.theme.bar_incomplete_color}{incomplete_part}{Colors.RESET}"
+                )
+                start_bracket = char_start if len(trimmed_content) > 1 else ""
+                end_bracket = char_end if len(trimmed_content) > 1 else ""
+                rendered_content = f"{start_bracket}{rendered_complete_part}{rendered_incomplete_part}{end_bracket}"
 
                 return (content, rendered_content)
 
 
 class PercentageWidget(Widget):
     """Widget displaying percentage"""
+
     _render_priority = 10
 
-    def __init__(self, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
+    def __init__(
+        self, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None
+    ):
         self.reset(theme=theme, use_unicode=use_unicode)
 
-    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
-        prepared = '{:>2.0%}'.format(bar.progress)
+    def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
+        prepared = "{:>2.0%}".format(bar.progress)
         prepared = self._trim(prepared, width)
-        rendered = f'{self.theme.percentage_color}{prepared}{Colors.RESET}'
+        rendered = f"{self.theme.percentage_color}{prepared}{Colors.RESET}"
         return (prepared, rendered)
 
 
 class TimeWidget(Widget):
     """Widget displaying time information"""
+
     _render_priority = 20
 
-    def __init__(self, show_eta: bool = True, show_elapsed: bool = True, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
-        self.reset(show_eta=show_eta, show_elapsed=show_elapsed, progress=0.0, theme=theme, use_unicode=use_unicode)
+    def __init__(
+        self,
+        show_eta: bool = True,
+        show_elapsed: bool = True,
+        theme: Optional[Theme] = None,
+        use_unicode: Optional[bool] = None,
+    ):
+        self.reset(
+            show_eta=show_eta,
+            show_elapsed=show_elapsed,
+            progress=0.0,
+            theme=theme,
+            use_unicode=use_unicode,
+        )
 
-    def reset(self,
-              show_eta: Optional[bool] = None,
-              show_elapsed: Optional[bool] = None,
-              progress: Optional[float] = None,
-              theme: Optional[Theme] = None,
-              use_unicode: Optional[bool] = None):
+    def reset(
+        self,
+        show_eta: Optional[bool] = None,
+        show_elapsed: Optional[bool] = None,
+        progress: Optional[float] = None,
+        theme: Optional[Theme] = None,
+        use_unicode: Optional[bool] = None,
+    ):
         super().reset(theme=theme, use_unicode=use_unicode)
         if show_eta is not None:
             self.show_eta = show_eta
@@ -534,12 +613,12 @@ class TimeWidget(Widget):
         self.eta: Optional[float] = None
         self.eta_updated: datetime = datetime.now()
 
-    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
+    def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
         parts = []
 
         if self.show_elapsed:
             elapsed = self._format_seconds(bar.elapsed_time())
-            parts.append(f'{elapsed}')
+            parts.append(f"{elapsed}")
 
         if self.show_eta and bar.progress < 1.0:
             if self.progress != bar.progress:
@@ -547,102 +626,118 @@ class TimeWidget(Widget):
                 self.eta = bar.estimated_time()
                 self.eta_updated = datetime.now()
             if self.eta:
-                seconds = max(0, self.eta - (datetime.now() - self.eta_updated).total_seconds())
+                seconds = max(
+                    0, self.eta - (datetime.now() - self.eta_updated).total_seconds()
+                )
                 remaining = self._format_seconds(seconds)
-                parts.append(f'ETA {remaining}')
+                parts.append(f"ETA {remaining}")
 
-        prepared = ' '.join(parts)
+        prepared = " ".join(parts)
         prepared = self._trim(prepared, width)
 
-        rendered = f'{self.theme.time_color}{prepared}{Colors.RESET}'
+        rendered = f"{self.theme.time_color}{prepared}{Colors.RESET}"
         return (prepared, rendered)
 
     @staticmethod
     def _format_seconds(seconds: float) -> str:
         hours, remainder = divmod(int(seconds), 3600)
         minutes, seconds = divmod(remainder, 60)
-        return '{:02d}:{:02d}:{:02d}'.format(hours, minutes, seconds)
+        return "{:02d}:{:02d}:{:02d}".format(hours, minutes, seconds)
 
 
 class CounterWidget(Widget):
     """Widget displaying current/total count"""
+
     _render_priority = 30
 
-    def __init__(self, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
+    def __init__(
+        self, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None
+    ):
         self.reset(theme=theme, use_unicode=use_unicode)
 
-    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
+    def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
         if bar.total > 0:
-            prepared = f'{bar.current}/{bar.total}'
+            prepared = f"{bar.current}/{bar.total}"
         else:
-            prepared = f'{bar.current}'
+            prepared = f"{bar.current}"
         prepared = self._trim(prepared, width)
 
-        rendered = f'{self.theme.counter_color}{prepared}{Colors.RESET}'
+        rendered = f"{self.theme.counter_color}{prepared}{Colors.RESET}"
         return (prepared, rendered)
 
 
 class SpinnerWidget(Widget):
     """Animated spinner for indeterminate progress"""
+
     _render_priority = 20
 
-    FRAMES_SNAKE = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-    FRAMES_DOTS = ['⣷', '⣯', '⣟', '⡿', '⢿', '⣻', '⣽', '⣾']
-    FRAMES_ARROWS = ['←', '↖', '↑', '↗', '→', '↘', '↓', '↙']
-    FRAMES_BOUNCING = ['⠁', '⠈', '⠐', '⠠', '⢀', '⡀', '⠄', '⠂']
-    FRAMES_SPINNER = ['|', '/', '-', '\\']
+    FRAMES_SNAKE = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    FRAMES_DOTS = ["⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"]
+    FRAMES_ARROWS = ["←", "↖", "↑", "↗", "→", "↘", "↓", "↙"]
+    FRAMES_BOUNCING = ["⠁", "⠈", "⠐", "⠠", "⢀", "⡀", "⠄", "⠂"]
+    FRAMES_SPINNER = ["|", "/", "-", "\\"]
 
-    def __init__(self,
-                 style: str = 'dots',
-                 frames: Optional[List[str]] = None,
-                 theme: Optional[Theme] = None,
-                 use_unicode: Optional[bool] = None):
+    def __init__(
+        self,
+        style: str = "dots",
+        frames: Optional[List[str]] = None,
+        theme: Optional[Theme] = None,
+        use_unicode: Optional[bool] = None,
+    ):
         self._lock = threading.Lock()
         self.reset(style=style, frames=frames, theme=theme, use_unicode=use_unicode)
 
-    def reset(self,
-              style: str = 'dots',
-              frames: Optional[List[str]] = None,
-              use_unicode: Optional[bool] = None,
-              theme: Optional[Theme] = None):
+    def reset(
+        self,
+        style: str = "dots",
+        frames: Optional[List[str]] = None,
+        use_unicode: Optional[bool] = None,
+        theme: Optional[Theme] = None,
+    ):
         super().reset(theme=theme)
 
         if use_unicode is None:
             capability = _detect_terminal_capability()
-            use_unicode = capability in [TerminalCapability.BASIC, TerminalCapability.ADVANCED]
+            use_unicode = capability in [
+                TerminalCapability.BASIC,
+                TerminalCapability.ADVANCED,
+            ]
 
         if frames is not None:
             self.frames = frames
-        elif style == 'spinner' or not use_unicode:
+        elif style == "spinner" or not use_unicode:
             self.frames = self.FRAMES_SPINNER
-        elif style == 'dots':
+        elif style == "dots":
             self.frames = self.FRAMES_DOTS
-        elif style == 'arrows':
+        elif style == "arrows":
             self.frames = self.FRAMES_ARROWS
-        elif style == 'bouncing':
+        elif style == "bouncing":
             self.frames = self.FRAMES_BOUNCING
         else:
             self.frames = self.FRAMES_SNAKE
 
         self.frame_idx = 0
 
-    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
+    def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
         if bar.total == 0:
             with self._lock:
                 prepared = self.frames[self.frame_idx % len(self.frames)]
                 self.frame_idx += 1
 
             prepared = self._trim(prepared, width)
-            rendered = f'{self.theme.bar_complete_color}{prepared}{Colors.RESET}'
+            rendered = f"{self.theme.bar_complete_color}{prepared}{Colors.RESET}"
             return (prepared, rendered)
-        return ('', '')
+        return ("", "")
 
 
 class RateWidget(Widget):
     """Widget displaying processing rate"""
+
     _render_priority = 40
 
-    def __init__(self, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None):
+    def __init__(
+        self, theme: Optional[Theme] = None, use_unicode: Optional[bool] = None
+    ):
         self._lock = threading.Lock()
         self.reset(theme=theme, use_unicode=use_unicode)
 
@@ -652,13 +747,13 @@ class RateWidget(Widget):
         self.last_count = 0
         self.current_rate = 0.0
 
-    def render(self, bar: 'Bar', width: int) -> Tuple[str, str]:
+    def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
         with self._lock:
-            prepared = ''
+            prepared = ""
             if self.last_time is None:
                 self.last_time = time.time()
                 self.last_count = bar.current
-                prepared = '0.0 it/s'
+                prepared = "0.0 it/s"
             else:
                 current_time = time.time()
                 elapsed = current_time - self.last_time
@@ -668,11 +763,11 @@ class RateWidget(Widget):
                     self.last_time = current_time
                     self.last_count = bar.current
 
-                prepared = f'{self.current_rate:.1f} it/s'
+                prepared = f"{self.current_rate:.1f} it/s"
 
             prepared = self._trim(prepared, width)
 
-        rendered = f'{self.theme.counter_color}{prepared}{Colors.RESET}'
+        rendered = f"{self.theme.counter_color}{prepared}{Colors.RESET}"
         return (prepared, rendered)
 
 
@@ -680,9 +775,11 @@ class RateWidget(Widget):
 # Progress Bar Item
 # ============================================================================
 
+
 @dataclass
 class BarItem:
     """Data class representing a progress bar item"""
+
     index: int
     value: Any
 
@@ -691,17 +788,20 @@ class BarItem:
 # Progress Bar
 # ============================================================================
 
+
 class Bar:
     """Individual progress bar with customizable widgets"""
 
-    def __init__(self,
-                 total: int = 0,
-                 title: Union[str, Callable[[Any], str], None] = None,
-                 controller: Optional['_ProgressController'] = None,
-                 remove_on_complete: bool = False,
-                 indent: int = 0,
-                 on_update: Optional[Callable[[int, float], None]] = None,
-                 on_complete: Optional[Callable[[], None]] = None):
+    def __init__(
+        self,
+        total: int = 0,
+        title: Union[str, Callable[[Any], str], None] = None,
+        controller: Optional["_ProgressController"] = None,
+        remove_on_complete: bool = False,
+        indent: int = 0,
+        on_update: Optional[Callable[[int, float], None]] = None,
+        on_complete: Optional[Callable[[], None]] = None,
+    ):
         """
         Create a progress bar.
 
@@ -735,7 +835,6 @@ class Bar:
         self._item: Optional[BarItem] = None
         self._was_complete = False
 
-
     def __enter__(self):
         """Enter context manager"""
         if self.start_time is None:
@@ -753,7 +852,7 @@ class Bar:
         if self.start_time is None:
             self.start_time = datetime.now()
 
-    def set_controller(self, controller: Optional['_ProgressController']):
+    def set_controller(self, controller: Optional["_ProgressController"]):
         """Set the progress controller"""
         self.controller_ref = weakref.ref(controller) if controller else None
 
@@ -805,7 +904,7 @@ class Bar:
             try:
                 self.on_update(self.current, self.progress)
             except Exception:
-                logger.exception('on_update callback failed')
+                logger.exception("on_update callback failed")
 
         # Check for completion
         if not self._was_complete and self.is_complete():
@@ -814,7 +913,7 @@ class Bar:
                 try:
                     self.on_complete()
                 except Exception:
-                    logger.exception('on_complete callback failed')
+                    logger.exception("on_complete callback failed")
 
     def reset(self):
         """Reset progress bar to initial state"""
@@ -885,19 +984,22 @@ class Bar:
 # Progress Bar
 # ============================================================================
 
+
 class View:
     """View for rendering progress bar with widgets"""
 
-    def __init__(self,
-                 bar: Optional[Bar] = None,
-                 widgets: Optional[List[Widget]] = None,
-                 theme: Optional[Theme] = None,
-                 include_widgets: Optional[Set[type]] = None,
-                 exclude_widgets: Optional[Set[type]] = None,
-                 use_unicode: Optional[bool] = None,
-                 min_update_interval: float = 0.1,
-                 min_update_progress: float = 0.01,
-                 update_on_item_change: bool = True):
+    def __init__(
+        self,
+        bar: Optional[Bar] = None,
+        widgets: Optional[List[Widget]] = None,
+        theme: Optional[Theme] = None,
+        include_widgets: Optional[Set[type]] = None,
+        exclude_widgets: Optional[Set[type]] = None,
+        use_unicode: Optional[bool] = None,
+        min_update_interval: float = 0.1,
+        min_update_progress: float = 0.01,
+        update_on_item_change: bool = True,
+    ):
         """
         Create a progress bar view.
 
@@ -951,7 +1053,9 @@ class View:
         self.prev_progress: float = -1.0
         self._last_item: Optional[BarItem] = None
 
-        self.last_update_for_width: Dict[int, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        self.last_update_for_width: Dict[int, Dict[str, float]] = defaultdict(
+            lambda: defaultdict(float)
+        )
 
         self._render_cache = {}
 
@@ -976,21 +1080,46 @@ class View:
             total = bar.total
 
         if title is not None and TitleWidget not in exclude_widgets:
-            widgets.extend(filter(include_widget, [TitleWidget(title=title, theme=self.theme, use_unicode=self.use_unicode)]))
+            widgets.extend(
+                filter(
+                    include_widget,
+                    [
+                        TitleWidget(
+                            title=title, theme=self.theme, use_unicode=self.use_unicode
+                        )
+                    ],
+                )
+            )
 
         if total > 0:
-            widgets.extend(filter(include_widget, [
-                BarWidget(theme=self.theme, use_unicode=self.use_unicode),
-                PercentageWidget(theme=self.theme, use_unicode=self.use_unicode),
-                CounterWidget(theme=self.theme, use_unicode=self.use_unicode),
-                TimeWidget(theme=self.theme, use_unicode=self.use_unicode)
-            ]))
+            widgets.extend(
+                filter(
+                    include_widget,
+                    [
+                        BarWidget(theme=self.theme, use_unicode=self.use_unicode),
+                        PercentageWidget(
+                            theme=self.theme, use_unicode=self.use_unicode
+                        ),
+                        CounterWidget(theme=self.theme, use_unicode=self.use_unicode),
+                        TimeWidget(theme=self.theme, use_unicode=self.use_unicode),
+                    ],
+                )
+            )
         else:
-            widgets.extend(filter(include_widget, [
-                SpinnerWidget(theme=self.theme, use_unicode=self.use_unicode),
-                CounterWidget(theme=self.theme, use_unicode=self.use_unicode),
-                TimeWidget(show_eta=False, theme=self.theme, use_unicode=self.use_unicode)
-            ]))
+            widgets.extend(
+                filter(
+                    include_widget,
+                    [
+                        SpinnerWidget(theme=self.theme, use_unicode=self.use_unicode),
+                        CounterWidget(theme=self.theme, use_unicode=self.use_unicode),
+                        TimeWidget(
+                            show_eta=False,
+                            theme=self.theme,
+                            use_unicode=self.use_unicode,
+                        ),
+                    ],
+                )
+            )
 
         return widgets
 
@@ -1001,7 +1130,6 @@ class View:
     def get_bar(self) -> Optional[Bar]:
         """Get the associated progress bar"""
         return self._bar_ref() if self._bar_ref else None
-
 
     def should_update(self, width: int) -> bool:
         """Check if enough time has passed for an update"""
@@ -1016,7 +1144,10 @@ class View:
         """Validate and clean up the last update cache"""
         current_time = time.time()
         for width, last_width_info in list(self.last_update_for_width.items()):
-            if current_time - last_width_info.get('time', 0) >= self.cache_update_interval:
+            if (
+                current_time - last_width_info.get("time", 0)
+                >= self.cache_update_interval
+            ):
                 self._render_cache.pop(width, None)
                 self.last_update_for_width.pop(width, None)
 
@@ -1028,13 +1159,17 @@ class View:
         self._validate_last_update_cache()
 
         last_width_info = self.last_update_for_width[width]
-        last_progress_at_width = last_width_info.get('progress', 0.0)
-        last_time_at_width = last_width_info.get('time', 0)
+        last_progress_at_width = last_width_info.get("progress", 0.0)
+        last_time_at_width = last_width_info.get("time", 0)
 
         current_time = time.time()
 
         item_changed = self.update_on_item_change and (bar._item != self._last_item)
-        progress_changed = abs(bar.progress - last_progress_at_width) >= self.min_update_progress or (bar.progress == 1.0 and bar.progress != last_progress_at_width)
+        progress_changed = abs(
+            bar.progress - last_progress_at_width
+        ) >= self.min_update_progress or (
+            bar.progress == 1.0 and bar.progress != last_progress_at_width
+        )
         time_passed = (current_time - last_time_at_width) >= self.min_update_interval
 
         needs_update = item_changed or progress_changed or time_passed
@@ -1063,8 +1198,8 @@ class View:
 
         if self._should_update_internal(width) or width not in self._render_cache:
             self._render_cache[width] = self._render_internal(bar, width)
-            self.last_update_for_width[width]['progress'] = bar.progress
-            self.last_update_for_width[width]['time'] = time.time()
+            self.last_update_for_width[width]["progress"] = bar.progress
+            self.last_update_for_width[width]["time"] = time.time()
 
         # Update timestamps
         self.last_update_time = time.time()
@@ -1077,13 +1212,15 @@ class View:
 
     def _render_internal(self, bar: Bar, width: int) -> List[str]:
         """Render the progress bar to a string"""
-        rendered_widgets = [('', '')] * len(self.widgets)
+        rendered_widgets = [("", "")] * len(self.widgets)
         num_spaces = len(self.widgets) - 1
         all_widgets_empty = False
         empty_widget_indexes = set()
         initial_run = True
 
-        widgets_by_priority = sorted(enumerate(self.widgets), key=lambda x: x[1].render_priority)
+        widgets_by_priority = sorted(
+            enumerate(self.widgets), key=lambda x: x[1].render_priority
+        )
 
         while not all_widgets_empty:
             available_width = max(0, width - bar.indent - num_spaces)
@@ -1114,12 +1251,16 @@ class View:
 
         parts = [w[1] for w in rendered_widgets if w and w[0]]
         if not parts:
-            return [' ' * width]
+            return [" " * width]
 
-        indent_str = ' ' * bar.indent
-        rendered = indent_str + ' '.join(parts)
-        rendered_width = sum(len(w[0]) for w in rendered_widgets if w) + len(indent_str) + (len(parts) - 1)
-        padding = ' ' * (width - rendered_width) if width > rendered_width else ''
+        indent_str = " " * bar.indent
+        rendered = indent_str + " ".join(parts)
+        rendered_width = (
+            sum(len(w[0]) for w in rendered_widgets if w)
+            + len(indent_str)
+            + (len(parts) - 1)
+        )
+        padding = " " * (width - rendered_width) if width > rendered_width else ""
 
         return [rendered + padding]
 
@@ -1132,10 +1273,15 @@ class _Layout(MutableSequence):
     """Layout configuration for progress bars"""
 
     class Type(Enum):
-        ROW = 'row'
-        COLUMN = 'column'
+        ROW = "row"
+        COLUMN = "column"
 
-    def __init__(self, name: str, type: Type = Type.COLUMN, components: Optional[List[Union[View, '_Layout']]] = None):
+    def __init__(
+        self,
+        name: str,
+        type: Type = Type.COLUMN,
+        components: Optional[List[Union[View, "_Layout"]]] = None,
+    ):
         self.name: str = name
         self.parents: Set[str] = set()
         self.type: _Layout.Type = type
@@ -1156,7 +1302,7 @@ class _Layout(MutableSequence):
     def insert(self, index, value):
         self._components.insert(index, value)
 
-    def add(self, component: Union[View, '_Layout']):
+    def add(self, component: Union[View, "_Layout"]):
         self._components.append(component)
 
     def add_parent(self, parent: str):
@@ -1188,7 +1334,12 @@ class _Layout(MutableSequence):
         elif len(self) > 0:  # ROW
             approx_component_available_width = (available_width // len(self)) - 1
             component_widths = [approx_component_available_width] * len(self)
-            leftover = available_width - (approx_component_available_width * len(self)) - len(self) + 1
+            leftover = (
+                available_width
+                - (approx_component_available_width * len(self))
+                - len(self)
+                + 1
+            )
 
             while leftover > 0:
                 for i in range(len(component_widths)):
@@ -1210,11 +1361,11 @@ class _Layout(MutableSequence):
             for idx, rendered in enumerate(rendered_components):
                 component_available_width = component_widths[idx]
                 added_lines_count = max_lines - len(rendered)
-                rendered.extend([' ' * component_available_width] * added_lines_count)
+                rendered.extend([" " * component_available_width] * added_lines_count)
 
             for i in range(max_lines):
                 line_parts = [rendered[i] for rendered in rendered_components]
-                line = ' '.join(line_parts)
+                line = " ".join(line_parts)
                 lines.append(line)
 
         return lines
@@ -1224,10 +1375,11 @@ class _Layout(MutableSequence):
 # StdProxy - Redirecting stdout/stderr to progress controller
 # ============================================================================
 
+
 class _StdProxy:
     """Proxy to redirect stdout/stderr to progress controller"""
 
-    def __init__(self, controller: '_ProgressController', stream: TextIO):
+    def __init__(self, controller: "_ProgressController", stream: TextIO):
         self.controller = controller
         self.stream = stream
         self.buffer = []
@@ -1239,18 +1391,18 @@ class _StdProxy:
         with self.controller.lock():
             self.buffer.append(data)
 
-            if '\n' not in data:
+            if "\n" not in data:
                 return
 
-            full_data = ''.join(self.buffer)
+            full_data = "".join(self.buffer)
             self.buffer = []
 
             # Check if there's trailing data after the last newline
-            if not full_data.endswith('\n'):
+            if not full_data.endswith("\n"):
                 # Split at last newline
-                last_newline = full_data.rfind('\n')
-                complete_part = full_data[:last_newline + 1]
-                trailing_part = full_data[last_newline + 1:]
+                last_newline = full_data.rfind("\n")
+                complete_part = full_data[: last_newline + 1]
+                trailing_part = full_data[last_newline + 1 :]
 
                 # Keep trailing part in buffer
                 self.buffer.append(trailing_part)
@@ -1259,7 +1411,7 @@ class _StdProxy:
                 data = full_data
 
             if data:
-                new_line_count = data.count('\n')
+                new_line_count = data.count("\n")
                 self.controller._clear_internal(force_top_lines=new_line_count)
                 self.stream.write(data)
                 self.controller._display_internal()
@@ -1270,10 +1422,10 @@ class _StdProxy:
 
     def _flush_internal(self):
         if self.buffer:
-            data = ''.join(itertools.chain(self.buffer, ['\n']))
+            data = "".join(itertools.chain(self.buffer, ["\n"]))
             self.buffer = []
 
-            new_line_count = data.count('\n')
+            new_line_count = data.count("\n")
             self.controller._clear_internal(force_top_lines=new_line_count)
             self.stream.write(data)
             self.stream.flush()
@@ -1288,6 +1440,7 @@ class _StdProxy:
 # ============================================================================
 # Collection Watcher
 # ============================================================================
+
 
 def _collection_watcher():
     """Watch collections for changes and update watched bars"""
@@ -1328,16 +1481,19 @@ def _collection_watcher():
         except Exception:
             error_count += 1
             if error_count <= max_errors:
-                logger.exception('Collection watcher failed (error %d/%d)', error_count, max_errors)
+                logger.exception(
+                    "Collection watcher failed (error %d/%d)", error_count, max_errors
+                )
             elif error_count == max_errors + 1:
-                logger.error('Collection watcher: suppressing further errors')
+                logger.error("Collection watcher: suppressing further errors")
             # Continue despite errors, but stop spamming logs
             time.sleep(1)  # Back off on errors
 
 
-#===========================================================================
+# ===========================================================================
 # Terminal Width Watcher
 # ===========================================================================
+
 
 def _terminal_width_watcher():
     error_count = 0
@@ -1363,7 +1519,6 @@ def _terminal_width_watcher():
                 continue
             _sigwinch_pending = False
 
-
             global _terminal_width, _terminal_height
             _terminal_width, _terminal_height = _get_terminal_size()
 
@@ -1376,9 +1531,13 @@ def _terminal_width_watcher():
         except Exception:
             error_count += 1
             if error_count <= max_errors:
-                logger.exception('Terminal width watcher failed (error %d/%d)', error_count, max_errors)
+                logger.exception(
+                    "Terminal width watcher failed (error %d/%d)",
+                    error_count,
+                    max_errors,
+                )
             elif error_count == max_errors + 1:
-                logger.error('Terminal width watcher: suppressing further errors')
+                logger.error("Terminal width watcher: suppressing further errors")
             # Continue despite errors, but stop spamming logs
             time.sleep(1)  # Back off on errors
 
@@ -1387,14 +1546,16 @@ def _terminal_width_watcher():
 # Progress _ProgressController - Managing multiple progress bars
 # ============================================================================
 
+
 class _ProgressController:
     """Manages multiple progress bars with different layout modes"""
-    _instance: Optional['_ProgressController'] = None
+
+    _instance: Optional["_ProgressController"] = None
     _lock = threading.Lock()
     _initialized = False
     _terminal_width_watcher_thread = None
     _collection_watcher_thread = None
-    _DEFAULT_LAYOUT_NAME = '__default__'
+    _DEFAULT_LAYOUT_NAME = "__default__"
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -1403,17 +1564,19 @@ class _ProgressController:
                     cls._instance = super(_ProgressController, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self,
-                 remove_on_complete: bool = False,
-                 terminal_padding_right: int = 20,
-                 watch_interval: float = 0.5,
-                 min_update_interval: float = 0.1,
-                 min_update_progress: float = 0.01,
-                 update_on_item_change: bool = True,
-                 force_redraw: bool = False,
-                 stream: TextIO = sys.stderr,
-                 proxy_stdout: bool = True,
-                 proxy_stderr: bool = True):
+    def __init__(
+        self,
+        remove_on_complete: bool = False,
+        terminal_padding_right: int = 20,
+        watch_interval: float = 0.5,
+        min_update_interval: float = 0.1,
+        min_update_progress: float = 0.01,
+        update_on_item_change: bool = True,
+        force_redraw: bool = False,
+        stream: TextIO = sys.stderr,
+        proxy_stdout: bool = True,
+        proxy_stderr: bool = True,
+    ):
         """
         Create a progress controller.
 
@@ -1467,22 +1630,28 @@ class _ProgressController:
             self._last_lines_drawn_count = 0
 
             self._bar_usage: WeakKeyDictionary[Bar, int] = WeakKeyDictionary()
-            self._view_usage: WeakKeyDictionary[Bar, Dict[View, int]] = WeakKeyDictionary()
+            self._view_usage: WeakKeyDictionary[Bar, Dict[View, int]] = (
+                WeakKeyDictionary()
+            )
 
             self._active_bars: Set[Bar] = set()
 
             self._watched_bars: WeakSet[Bar] = WeakSet()
-            self._watched_collections: WeakKeyDictionary[Bar, ReferenceType] = WeakKeyDictionary()
+            self._watched_collections: WeakKeyDictionary[Bar, ReferenceType] = (
+                WeakKeyDictionary()
+            )
 
             self.layouts = {
-                self._DEFAULT_LAYOUT_NAME: _Layout(self._DEFAULT_LAYOUT_NAME, type=_Layout.Type.COLUMN)
+                self._DEFAULT_LAYOUT_NAME: _Layout(
+                    self._DEFAULT_LAYOUT_NAME, type=_Layout.Type.COLUMN
+                )
             }
 
             self._registered_layouts: Dict[str, _Layout] = {
                 self._DEFAULT_LAYOUT_NAME: self.layouts[self._DEFAULT_LAYOUT_NAME]
             }
 
-            self._layout_usage: Dict[str, int]= defaultdict(int)
+            self._layout_usage: Dict[str, int] = defaultdict(int)
 
             self._stream: TextIO = stream
             self._is_in_tty = self._stream.isatty()
@@ -1496,11 +1665,15 @@ class _ProgressController:
                 sys.stderr = _StdProxy(self, self._original_stderr)
 
             if not _ProgressController._terminal_width_watcher_thread:
-                _ProgressController._terminal_width_watcher_thread = threading.Thread(target=_terminal_width_watcher, daemon=True)
+                _ProgressController._terminal_width_watcher_thread = threading.Thread(
+                    target=_terminal_width_watcher, daemon=True
+                )
                 _ProgressController._terminal_width_watcher_thread.start()
 
             if not _ProgressController._collection_watcher_thread:
-                _ProgressController._collection_watcher_thread = threading.Thread(target=_collection_watcher, daemon=True)
+                _ProgressController._collection_watcher_thread = threading.Thread(
+                    target=_collection_watcher, daemon=True
+                )
                 _ProgressController._collection_watcher_thread.start()
 
             self._closed = False
@@ -1609,7 +1782,7 @@ class _ProgressController:
             self._is_in_tty = value.isatty()
 
     @classmethod
-    def instance(cls) -> '_ProgressController':
+    def instance(cls) -> "_ProgressController":
         """Get the singleton instance of _ProgressController"""
         return cls._instance or cls()
 
@@ -1660,11 +1833,13 @@ class _ProgressController:
         with self.lock():
             return bar in self._active_bars
 
-    def add_bar(self,
-                bar: Bar,
-                view: Optional[View] = None,
-                layouts: Optional[List[str]] = None,
-                **kwargs):
+    def add_bar(
+        self,
+        bar: Bar,
+        view: Optional[View] = None,
+        layouts: Optional[List[str]] = None,
+        **kwargs,
+    ):
         """Add a progress bar to the controller"""
         if view is None:
             view = self.create_view(bar, **kwargs)
@@ -1751,7 +1926,7 @@ class _ProgressController:
                 bar_view_usage = self._view_usage[bar]
                 bar_view_usage[view] -= 1
                 if bar_view_usage[view] <= 0:
-                   del bar_view_usage[view]
+                    del bar_view_usage[view]
 
             self._bar_usage[bar] -= 1
 
@@ -1778,7 +1953,9 @@ class _ProgressController:
             "theme",
             "use_unicode",
         ]
-        title_widget_config = {key: kwargs[key] for key in title_widget_args if key in kwargs}
+        title_widget_config = {
+            key: kwargs[key] for key in title_widget_args if key in kwargs
+        }
 
         bar_widget_args = [
             "use_unicode",
@@ -1794,19 +1971,25 @@ class _ProgressController:
             "char_complete",
             "char_complete_fractions",
         ]
-        bar_widget_config = {key: kwargs[key] for key in bar_widget_args if key in kwargs}
+        bar_widget_config = {
+            key: kwargs[key] for key in bar_widget_args if key in kwargs
+        }
 
         percentage_widget_args = [
             "theme",
             "use_unicode",
         ]
-        percentage_widget_config = {key: kwargs[key] for key in percentage_widget_args if key in kwargs}
+        percentage_widget_config = {
+            key: kwargs[key] for key in percentage_widget_args if key in kwargs
+        }
 
         counter_widget_args = [
             "theme",
             "use_unicode",
         ]
-        counter_widget_config = {key: kwargs[key] for key in counter_widget_args if key in kwargs}
+        counter_widget_config = {
+            key: kwargs[key] for key in counter_widget_args if key in kwargs
+        }
 
         time_widget_args = [
             "show_eta",
@@ -1814,7 +1997,9 @@ class _ProgressController:
             "theme",
             "use_unicode",
         ]
-        time_widget_config = {key: kwargs[key] for key in time_widget_args if key in kwargs}
+        time_widget_config = {
+            key: kwargs[key] for key in time_widget_args if key in kwargs
+        }
 
         view_args = [
             "bar",
@@ -1836,7 +2021,7 @@ class _ProgressController:
             BarWidget(**bar_widget_config),
             PercentageWidget(**percentage_widget_config),
             CounterWidget(**counter_widget_config),
-            TimeWidget(**time_widget_config)
+            TimeWidget(**time_widget_config),
         ]
 
         view_config["bar"] = bar
@@ -1849,9 +2034,7 @@ class _ProgressController:
 
         return bar
 
-    def create_view(self,
-                    bar: Optional[Bar] = None,
-                    **kwargs) -> View:
+    def create_view(self, bar: Optional[Bar] = None, **kwargs) -> View:
         view_args = [
             "widgets",
             "theme",
@@ -1868,12 +2051,14 @@ class _ProgressController:
 
         return view
 
-    def add_watch(self,
-                  collection: Union[Queue, Sized],
-                  title: Union[str, Callable[[Any], str], None] = None,
-                  bar: Optional[Bar] = None,
-                  max: Optional[int] = None,
-                  layouts: Optional[List[str]] = None) -> Bar:
+    def add_watch(
+        self,
+        collection: Union[Queue, Sized],
+        title: Union[str, Callable[[Any], str], None] = None,
+        bar: Optional[Bar] = None,
+        max: Optional[int] = None,
+        layouts: Optional[List[str]] = None,
+    ) -> Bar:
         """Add a bar to watch a collection, like queue or list"""
         if max is None:
             if isinstance(collection, Queue):
@@ -1881,11 +2066,13 @@ class _ProgressController:
             elif isinstance(collection, Sized):
                 max = len(collection)
         if bar is None:
-            bar = self.create_bar(title=title,
-                                total=max,
-                                layouts=layouts,
-                                theme=Theme.load(),
-                                exclude_widgets=set([TimeWidget]))
+            bar = self.create_bar(
+                title=title,
+                total=max,
+                layouts=layouts,
+                theme=Theme.load(),
+                exclude_widgets=set([TimeWidget]),
+            )
 
         self._watched_bars.add(bar)
         self._watched_collections[bar] = weakref.ref(collection)
@@ -1899,7 +2086,12 @@ class _ProgressController:
         if bar in self._active_bars:
             self.remove_bar(bar)
 
-    def _create_layout(self, name: str, type: _Layout.Type = _Layout.Type.COLUMN, parents: Optional[List[str]] = None):
+    def _create_layout(
+        self,
+        name: str,
+        type: _Layout.Type = _Layout.Type.COLUMN,
+        parents: Optional[List[str]] = None,
+    ):
         """Add a new layout configuration"""
         if parents is None:
             parents = [self._DEFAULT_LAYOUT_NAME]
@@ -1907,10 +2099,14 @@ class _ProgressController:
         with self.lock():
             self._create_layout_internal(name, parents, type=type)
 
-    def _create_layout_internal(self, name: str, parents: List[str], type: _Layout.Type = _Layout.Type.COLUMN):
+    def _create_layout_internal(
+        self, name: str, parents: List[str], type: _Layout.Type = _Layout.Type.COLUMN
+    ):
         """Internal method to create layout without locking"""
         if name in self._registered_layouts:
-            raise ValueError(f"Layout '{name}' already exists. Note: layout names must be globally unique.")
+            raise ValueError(
+                f"Layout '{name}' already exists. Note: layout names must be globally unique."
+            )
 
         _layout = _Layout(name, type=type)
         self._registered_layouts[name] = _layout
@@ -1932,7 +2128,9 @@ class _ProgressController:
         """Internal method to add layout without locking"""
         _layout = self._registered_layouts.get(name)
         if _layout is None:
-            raise ValueError(f"Layout '{name}' does not exist. It must be created before it can be used.")
+            raise ValueError(
+                f"Layout '{name}' does not exist. It must be created before it can be used."
+            )
 
         for parent in parents:
             _parent = self._registered_layouts.get(parent)
@@ -1943,7 +2141,9 @@ class _ProgressController:
             layout_descendants = self._get_layout_descendants(_layout)
 
             if layout_parents & layout_descendants:
-                raise ValueError(f"Cannot add layout '{name}' to parent '{parent}' as it would create a circular reference.")
+                raise ValueError(
+                    f"Cannot add layout '{name}' to parent '{parent}' as it would create a circular reference."
+                )
 
         for parent in parents:
             _layout.add_parent(parent)
@@ -2029,11 +2229,13 @@ class _ProgressController:
             self._quiet = False
             self.display(force_update=True)
 
-    def display(self,
-                item: Optional[BarItem] = None,
-                target_bar: Optional[Bar] = None,
-                force_update: bool = False,
-                force_clear: bool = False):
+    def display(
+        self,
+        item: Optional[BarItem] = None,
+        target_bar: Optional[Bar] = None,
+        force_update: bool = False,
+        force_clear: bool = False,
+    ):
         if not self._is_in_tty or self._quiet:
             return
 
@@ -2046,7 +2248,10 @@ class _ProgressController:
             if not needs_update:
                 for bar in list(self._active_bars):
                     views = self._view_usage.get(bar, {})
-                    needs_update = any(view._should_update_internal(width=_terminal_width) for view in views)
+                    needs_update = any(
+                        view._should_update_internal(width=_terminal_width)
+                        for view in views
+                    )
 
                     if needs_update:
                         break
@@ -2061,20 +2266,25 @@ class _ProgressController:
 
         try:
             # Hide cursor during update
-            self._stream.write('\033[?25l')
+            self._stream.write("\033[?25l")
 
             lines = self._render_internal()
             lines_to_draw_count = len(lines)
 
             # Clear previous lines
-            self._clear_internal(force=force_clear, force_bottom_lines=max(0, self._last_lines_drawn_count - lines_to_draw_count))
+            self._clear_internal(
+                force=force_clear,
+                force_bottom_lines=max(
+                    0, self._last_lines_drawn_count - lines_to_draw_count
+                ),
+            )
 
             self._display_internal(lines=lines, final=final)
         except Exception:
-            logger.exception('Display progress failed')
+            logger.exception("Display progress failed")
         finally:
             # Show cursor again
-            self._stream.write('\033[?25h')
+            self._stream.write("\033[?25h")
 
     def _render_internal(self) -> List[str]:
         """Render the progress bars to lines"""
@@ -2083,7 +2293,7 @@ class _ProgressController:
         lines = self.render(available_width)
 
         max_lines = max(1, _terminal_height - 1)
-        lines = lines[:min(len(lines), max_lines)]
+        lines = lines[: min(len(lines), max_lines)]
 
         return lines
 
@@ -2093,7 +2303,9 @@ class _ProgressController:
             return
 
         # Handle completion
-        all_complete = all(bar.is_complete() for bar in self._active_bars if bar.total > 0)
+        all_complete = all(
+            bar.is_complete() for bar in self._active_bars if bar.total > 0
+        )
         if all_complete:
             if self._remove_on_complete:
                 # Clear all lines
@@ -2107,25 +2319,33 @@ class _ProgressController:
         if not lines:
             return
 
-        output = '\r' + '\n'.join(lines)
+        output = "\r" + "\n".join(lines)
         self._last_lines_drawn_count = len(lines)
 
         if final:
-            output += '\n'
+            output += "\n"
             self._last_lines_drawn_count += 1
 
         self._stream.write(output)
         self._stream.flush()
 
-    def clear(self, force: bool = False, force_top_lines: int = 0, force_bottom_lines: int = 0):
+    def clear(
+        self, force: bool = False, force_top_lines: int = 0, force_bottom_lines: int = 0
+    ):
         """Clear the displayed progress bars"""
         if not self._is_in_tty or self._quiet:
             return
 
         with self.lock():
-            self._clear_internal(force=force, force_top_lines=force_top_lines, force_bottom_lines=force_bottom_lines)
+            self._clear_internal(
+                force=force,
+                force_top_lines=force_top_lines,
+                force_bottom_lines=force_bottom_lines,
+            )
 
-    def _clear_internal(self, force: bool = False, force_top_lines: int = 0, force_bottom_lines: int = 0):
+    def _clear_internal(
+        self, force: bool = False, force_top_lines: int = 0, force_bottom_lines: int = 0
+    ):
         """Clear the displayed progress bars"""
         if not self._is_in_tty or self._quiet:
             return
@@ -2136,23 +2356,33 @@ class _ProgressController:
         lines_to_clear = self._last_lines_drawn_count
         clear_sequence = []
 
-        if self.force_redraw or force or force_top_lines + force_bottom_lines >= lines_to_clear:
+        if (
+            self.force_redraw
+            or force
+            or force_top_lines + force_bottom_lines >= lines_to_clear
+        ):
             # Move up and clear each previous line
-            clear_sequence.append('\033[F'.join(['\r\033[K'] * lines_to_clear))  # Move up one line and clear from cursor to end of line
+            clear_sequence.append(
+                "\033[F".join(["\r\033[K"] * lines_to_clear)
+            )  # Move up one line and clear from cursor to end of line
         else:
             lines_to_skip = lines_to_clear - force_top_lines - force_bottom_lines - 1
 
             bottom_to_clear = max(0, force_bottom_lines - force_top_lines)
             lines_to_skip += force_bottom_lines - bottom_to_clear
 
-            clear_sequence.append('\r\033[K\033[F' * bottom_to_clear)  # Clear bottom lines
-            clear_sequence.append('\033[F' * lines_to_skip)  # Move cursor up to the first line to clear
-            clear_sequence.append('\033[F\r\033[K' * force_top_lines)
+            clear_sequence.append(
+                "\r\033[K\033[F" * bottom_to_clear
+            )  # Clear bottom lines
+            clear_sequence.append(
+                "\033[F" * lines_to_skip
+            )  # Move cursor up to the first line to clear
+            clear_sequence.append("\033[F\r\033[K" * force_top_lines)
 
         # Move to beginning of first line
-        clear_sequence.append('\r')
+        clear_sequence.append("\r")
 
-        self._stream.write(''.join(clear_sequence))
+        self._stream.write("".join(clear_sequence))
         self._stream.flush()
 
         self._last_lines_drawn_count = 0
@@ -2160,137 +2390,120 @@ class _ProgressController:
 
 class ProgressAPI(Protocol):
     """Protocol for Progress class methods"""
-    def __enter__(self) -> '_ProgressController':
-        ...
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        ...
+    def __enter__(self) -> "_ProgressController": ...
 
-    @classmethod
-    def lock(cls):
-        ...
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None: ...
 
     @classmethod
-    def instance(cls) -> '_ProgressController':
-        ...
+    def lock(cls): ...
+
+    @classmethod
+    def instance(cls) -> "_ProgressController": ...
 
     @property
-    def remove_on_complete(self) -> bool:
-        ...
+    def remove_on_complete(self) -> bool: ...
 
     @remove_on_complete.setter
-    def remove_on_complete(self, value: bool) -> None:
-        ...
+    def remove_on_complete(self, value: bool) -> None: ...
 
     @property
-    def terminal_padding_right(self) -> int:
-        ...
+    def terminal_padding_right(self) -> int: ...
 
     @terminal_padding_right.setter
-    def terminal_padding_right(self, value: int) -> None:
-        ...
+    def terminal_padding_right(self, value: int) -> None: ...
 
     @property
-    def watch_interval(self) -> float:
-        ...
+    def watch_interval(self) -> float: ...
 
     @watch_interval.setter
-    def watch_interval(self, value: float) -> None:
-        ...
+    def watch_interval(self, value: float) -> None: ...
 
     @property
-    def min_update_interval(self) -> float:
-        ...
+    def min_update_interval(self) -> float: ...
 
     @min_update_interval.setter
-    def min_update_interval(self, value: float) -> None:
-        ...
+    def min_update_interval(self, value: float) -> None: ...
 
     @property
-    def min_update_progress(self) -> float:
-        ...
+    def min_update_progress(self) -> float: ...
 
     @min_update_progress.setter
-    def min_update_progress(self, value: float) -> None:
-        ...
+    def min_update_progress(self, value: float) -> None: ...
 
     @property
-    def update_on_item_change(self) -> bool:
-        ...
+    def update_on_item_change(self) -> bool: ...
 
     @update_on_item_change.setter
-    def update_on_item_change(self, value: bool) -> None:
-        ...
+    def update_on_item_change(self, value: bool) -> None: ...
 
     @property
-    def force_redraw(self) -> bool:
-        ...
+    def force_redraw(self) -> bool: ...
 
     @force_redraw.setter
-    def force_redraw(self, value: bool) -> None:
-        ...
+    def force_redraw(self, value: bool) -> None: ...
 
     @property
-    def stream(self) -> TextIO:
-        ...
+    def stream(self) -> TextIO: ...
 
     @stream.setter
-    def stream(self, value: TextIO) -> None:
-        ...
+    def stream(self, value: TextIO) -> None: ...
 
-    def close(self) -> None:
-        ...
+    def close(self) -> None: ...
 
-    def contains_bar(self, bar: Bar) -> bool:
-        ...
+    def contains_bar(self, bar: Bar) -> bool: ...
 
-    def add_bar(self, bar: Bar, view: Optional[View] = None, layouts: Optional[List[str]] = None, **kwargs) -> None:
-        ...
+    def add_bar(
+        self,
+        bar: Bar,
+        view: Optional[View] = None,
+        layouts: Optional[List[str]] = None,
+        **kwargs,
+    ) -> None: ...
 
-    def create_bar(self, view: Optional[View] = None, layouts: Optional[List[str]] = None, **kwargs) -> Bar:
-        ...
+    def create_bar(
+        self, view: Optional[View] = None, layouts: Optional[List[str]] = None, **kwargs
+    ) -> Bar: ...
 
-    def remove_bar(self, bar: Bar, layouts: Optional[List[str]] = None) -> None:
-        ...
+    def remove_bar(self, bar: Bar, layouts: Optional[List[str]] = None) -> None: ...
 
-    def add_custom_bar(self, **kwargs):
-        ...
+    def add_custom_bar(self, **kwargs): ...
 
-    def create_view(self, bar: Optional[Bar] = None, **kwargs) -> View:
-        ...
+    def create_view(self, bar: Optional[Bar] = None, **kwargs) -> View: ...
 
-    def add_watch(self, collection: Union[Queue, Sized], title: Union[str, Callable[[Any], str], None] = None, max: Optional[int] = None, layouts: Optional[List[str]] = None) -> Bar:
-        ...
+    def add_watch(
+        self,
+        collection: Union[Queue, Sized],
+        title: Union[str, Callable[[Any], str], None] = None,
+        max: Optional[int] = None,
+        layouts: Optional[List[str]] = None,
+    ) -> Bar: ...
 
-    def remove_watch(self, bar: Bar) -> None:
-        ...
+    def remove_watch(self, bar: Bar) -> None: ...
 
-    def create_row(self, name: str, parents: Optional[List[str]] = None) -> None:
-        ...
+    def create_row(self, name: str, parents: Optional[List[str]] = None) -> None: ...
 
-    def create_column(self, name: str, parents: Optional[List[str]] = None) -> None:
-        ...
+    def create_column(self, name: str, parents: Optional[List[str]] = None) -> None: ...
 
-    def add_layout(self, name: str, parents: Optional[List[str]] = None) -> None:
-        ...
+    def add_layout(self, name: str, parents: Optional[List[str]] = None) -> None: ...
 
-    def remove_layout(self, name: str, parents: Optional[List[str]] = None) -> None:
-        ...
+    def remove_layout(self, name: str, parents: Optional[List[str]] = None) -> None: ...
 
-    def render(self, available_width: int) -> List[str]:
-        ...
+    def render(self, available_width: int) -> List[str]: ...
 
-    def hide(self) -> None:
-        ...
+    def hide(self) -> None: ...
 
-    def unhide(self) -> None:
-        ...
+    def unhide(self) -> None: ...
 
-    def display(self, item: Optional[BarItem] = None, target_bar: Optional[Bar] = None, force_update: bool = False, force_clear: bool = False) -> None:
-        ...
+    def display(
+        self,
+        item: Optional[BarItem] = None,
+        target_bar: Optional[Bar] = None,
+        force_update: bool = False,
+        force_clear: bool = False,
+    ) -> None: ...
 
-    def clear(self, force: bool = False) -> None:
-        ...
+    def clear(self, force: bool = False) -> None: ...
 
 
 class _ProgressMeta(type):
@@ -2351,6 +2564,7 @@ if TYPE_CHECKING:
 # ============================================================================
 # Terminal Width Handling
 # ============================================================================
+
 
 def _get_terminal_size(default: Optional[os.terminal_size] = None) -> Tuple[int, int]:
     """Return the width of the terminal in columns, with a safe fallback."""
@@ -2414,7 +2628,7 @@ def _update_terminal_width(signum, frame):
 
     try:
         if _sigwinch_write_fd is not None:
-            os.write(_sigwinch_write_fd, b'\x00')
+            os.write(_sigwinch_write_fd, b"\x00")
     except (OSError, BlockingIOError):
         # Pipe might be full, that's ok - we already have pending signal
         pass
@@ -2427,7 +2641,7 @@ def _update_terminal_width(signum, frame):
             if callable(prev):
                 prev(signum, frame)
     except Exception:
-        logger.exception('Chained SIGWINCH handler failed')
+        logger.exception("Chained SIGWINCH handler failed")
 
 
 _prev_sigwinch_handler = signal.getsignal(signal.SIGWINCH)
@@ -2438,22 +2652,27 @@ signal.signal(signal.SIGWINCH, _update_terminal_width)
 # Convenience Functions and Context Managers
 # ============================================================================
 
+
 class ProgressContext:
     """Context manager for progress bars"""
 
-    def __init__(self,
-                 total: int = 0,
-                 title: Union[str, Callable[[Any], str], None] = None,
-                 bar: Optional[Bar] = None,
-                 layouts: Optional[List[str]] = None,
-                 **kwargs):
+    def __init__(
+        self,
+        total: int = 0,
+        title: Union[str, Callable[[Any], str], None] = None,
+        bar: Optional[Bar] = None,
+        layouts: Optional[List[str]] = None,
+        **kwargs,
+    ):
         if bar is not None:
             self.bar = bar
             self.bar.total = total
             if not Progress.contains_bar(self.bar):
                 Progress.add_bar(self.bar, layouts=layouts, **kwargs)
         else:
-            self.bar = Progress.create_bar(total=total, title=title, layouts=layouts, **kwargs)
+            self.bar = Progress.create_bar(
+                total=total, title=title, layouts=layouts, **kwargs
+            )
 
     def __enter__(self):
         self.bar.start()
@@ -2481,11 +2700,13 @@ class ProgressContext:
         Progress.instance().display(item, self.bar)
 
 
-def progress(iterable,
-             total: int = 0,
-             title: Union[str, Callable[[Any], str], None] = None,
-             bar: Optional[Bar] = None,
-             **kwargs) -> Iterator:
+def progress(
+    iterable,
+    total: int = 0,
+    title: Union[str, Callable[[Any], str], None] = None,
+    bar: Optional[Bar] = None,
+    **kwargs,
+) -> Iterator:
     """
     Wrap an iterable to display progress automatically.
 

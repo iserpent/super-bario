@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "super-bario"
-version = "0.3.0"
+version = "0.3.1"
 description = "Super Bario: a powerful Python library for multi-bar, multi-layout terminal progress indicators with themes, widgets, and thread-safe updates."
 readme = "README.md"
 requires-python = ">=3.8"

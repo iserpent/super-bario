@@ -58,6 +58,7 @@ __all__ = [
     "CounterWidget",
     "SpinnerWidget",
     "RateWidget",
+    "TextWidget",
     "ElapsedTimeWidget",
     "EstimatedTimeWidget",
 ]
@@ -241,6 +242,10 @@ class Widget(ABC):
     def render_priority(self) -> int:
         """Render priority for widget ordering (lower is rendered first)"""
         return self._render_priority
+
+    @render_priority.setter
+    def render_priority(self, value: int):
+        self._render_priority = value
 
     def reset(
         self,
@@ -445,6 +450,7 @@ class BarWidget(Widget):
             - len(self.char_start_incomplete)
             - len(self.char_end_incomplete)
         )
+
         if trimmed_width < width:
             # Adjust parts to fit trimmed width
             if filled_width > trimmed_width:
@@ -454,6 +460,7 @@ class BarWidget(Widget):
                 complete_part = self.char_complete * filled_width
                 remaining_width = trimmed_width - filled_width
                 incomplete_part = self.char_incomplete * remaining_width
+
         return complete_part, incomplete_part
 
     def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
@@ -482,6 +489,7 @@ class BarWidget(Widget):
             # Indeterminate progress
             content = char_start + "-" * inner_width + char_end
             content = self._trim(content, width)
+
             return (
                 content,
                 f"{self.theme.bar_incomplete_color}{content}{Colors.RESET}",
@@ -529,6 +537,7 @@ class BarWidget(Widget):
             if progress_ratio >= 1.0:
                 content = char_start + self.char_complete * inner_width + char_end
                 content = self._trim(content, width)
+
                 return (content, f"{bar_color}{content}{Colors.RESET}")
             else:
                 complete_part = self.char_complete * filled_width
@@ -573,6 +582,37 @@ class PercentageWidget(Widget):
         prepared = "{:>2.0%}".format(bar.progress)
         prepared = self._trim(prepared, width)
         rendered = f"{self.theme.percentage_color}{prepared}{Colors.RESET}"
+
+        return (prepared, rendered)
+
+
+class TextWidget(Widget):
+    """Widget displaying the text"""
+
+    _render_priority = 100
+
+    def __init__(
+        self,
+        text: str = "",
+        theme: Optional[Theme] = None,
+        use_unicode: Optional[bool] = None,
+    ):
+        self.reset(text=text, theme=theme, use_unicode=use_unicode)
+
+    def reset(
+        self,
+        text: Optional[str] = None,
+        theme: Optional[Theme] = None,
+        use_unicode: Optional[bool] = None,
+    ):
+        super().reset(theme=theme, use_unicode=use_unicode)
+        if text is not None:
+            self.text = text
+
+    def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
+        prepared = self._trim(self.text, width)
+        rendered = f"{self.theme.title_color}{prepared}{Colors.RESET}"
+
         return (prepared, rendered)
 
 
@@ -583,6 +623,7 @@ class _TimeWidget(Widget):
     def _format_seconds(seconds: float) -> str:
         hours, remainder = divmod(int(seconds), 3600)
         minutes, seconds = divmod(remainder, 60)
+
         return "{:02d}:{:02d}:{:02d}".format(hours, minutes, seconds)
 
 
@@ -593,37 +634,37 @@ class ElapsedTimeWidget(_TimeWidget):
 
     def __init__(
         self,
-        label_elapsed: Optional[str] = None,
+        text: Optional[str] = None,
         theme: Optional[Theme] = None,
         use_unicode: Optional[bool] = None,
     ):
+        self.text_widget = TextWidget()
         self.reset(
-            label=label_elapsed,
+            text=text,
             theme=theme,
             use_unicode=use_unicode,
         )
 
     def reset(
         self,
-        label: Optional[str] = None,
+        text: Optional[str] = None,
         theme: Optional[Theme] = None,
         use_unicode: Optional[bool] = None,
     ):
         super().reset(theme=theme, use_unicode=use_unicode)
-        if label is not None:
-            self.label = label
-        else:
-            self.label = "⏱️" if self.use_unicode else ""
+
+        if text is None:
+            text = "⏱️" if self.use_unicode else ""
+
+        self.text_widget.reset(text=text, theme=theme, use_unicode=use_unicode)
 
     def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
-        parts = []
-        if self.label:
-            parts.append(self.label)
+        parts = [self.text_widget.render(bar, width=width)[0]]
+
         parts.append(self._format_seconds(bar.elapsed_time()))
 
-        prepared = " ".join(parts)
+        prepared = " ".join(p for p in parts if p)
         prepared = self._trim(prepared, width)
-
         rendered = f"{self.theme.time_color}{prepared}{Colors.RESET}"
 
         return (prepared, rendered)
@@ -636,15 +677,17 @@ class EstimatedTimeWidget(_TimeWidget):
 
     def __init__(
         self,
-        label_estimated: Optional[str] = None,
+        text: Optional[str] = None,
         spinner_style: Optional[str] = None,
         spinner_frames: Optional[List[str]] = None,
         theme: Optional[Theme] = None,
         use_unicode: Optional[bool] = None,
     ):
+        self.text_widget = TextWidget()
         self.spinner_widget = SpinnerWidget()
+
         self.reset(
-            label=label_estimated,
+            text=text,
             spinner_style=spinner_style,
             spinner_frames=spinner_frames,
             progress=0.0,
@@ -654,7 +697,7 @@ class EstimatedTimeWidget(_TimeWidget):
 
     def reset(
         self,
-        label: Optional[str] = None,
+        text: Optional[str] = None,
         spinner_style: Optional[str] = None,
         spinner_frames: Optional[List[str]] = None,
         progress: Optional[float] = None,
@@ -662,14 +705,18 @@ class EstimatedTimeWidget(_TimeWidget):
         use_unicode: Optional[bool] = None,
     ):
         super().reset(theme=theme, use_unicode=use_unicode)
-        if label is not None:
-            self.label = label
-        else:
-            self.label = "≈⏱️" if self.use_unicode else "ETA"
+
+        if text is None:
+            text = "≈⏱️" if self.use_unicode else "ETA"
+
         if progress is not None:
             self.progress = progress
+
         self.eta: Optional[float] = None
         self.eta_updated: datetime = datetime.now()
+
+        self.text_widget.reset(text=text, theme=theme, use_unicode=use_unicode)
+
         self.spinner_widget.reset(
             style=spinner_style or "dots",
             frames=spinner_frames,
@@ -685,7 +732,9 @@ class EstimatedTimeWidget(_TimeWidget):
                 self.progress = bar.progress
                 self.eta = bar.estimated_time()
                 self.eta_updated = datetime.now()
-            remaining = ""
+
+            parts.append(self.text_widget.render(bar, width=width)[0])
+
             if self.eta:
                 seconds = max(
                     0, self.eta - (datetime.now() - self.eta_updated).total_seconds()
@@ -693,11 +742,10 @@ class EstimatedTimeWidget(_TimeWidget):
                 remaining = self._format_seconds(seconds)
             else:
                 remaining = self.spinner_widget.render(bar, width=(width))[0]
-            if self.label:
-                parts.append(self.label)
+
             parts.append(remaining)
 
-        prepared = " ".join(parts)
+        prepared = " ".join(p for p in parts if p)
         prepared = self._trim(prepared, width)
         rendered = f"{self.theme.time_color}{prepared}{Colors.RESET}"
 
@@ -719,9 +767,10 @@ class CounterWidget(Widget):
             prepared = f"{bar.current}/{bar.total}"
         else:
             prepared = f"{bar.current}"
-        prepared = self._trim(prepared, width)
 
+        prepared = self._trim(prepared, width)
         rendered = f"{self.theme.counter_color}{prepared}{Colors.RESET}"
+
         return (prepared, rendered)
 
 
@@ -786,6 +835,7 @@ class SpinnerWidget(Widget):
 
         prepared = self._trim(prepared, width)
         rendered = f"{self.theme.bar_complete_color}{prepared}{Colors.RESET}"
+
         return (prepared, rendered)
 
 
@@ -807,8 +857,9 @@ class RateWidget(Widget):
         self.current_rate = 0.0
 
     def render(self, bar: "Bar", width: int) -> Tuple[str, str]:
+        prepared = ""
+
         with self._lock:
-            prepared = ""
             if self.last_time is None:
                 self.last_time = time.time()
                 self.last_count = bar.current
@@ -824,9 +875,9 @@ class RateWidget(Widget):
 
                 prepared = f"{self.current_rate:.1f} it/s"
 
-            prepared = self._trim(prepared, width)
-
+        prepared = self._trim(prepared, width)
         rendered = f"{self.theme.counter_color}{prepared}{Colors.RESET}"
+
         return (prepared, rendered)
 
 
@@ -898,12 +949,14 @@ class Bar:
         """Enter context manager"""
         if self.start_time is None:
             self.start_time = datetime.now()
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Exit context manager"""
         if not self.is_complete() and self.total > 0:
             self.update(self.total)
+
         return False
 
     def start(self):
@@ -920,10 +973,13 @@ class Bar:
         """Context manager for thread-safe operations"""
         if self.controller_ref is not None:
             controller = self.controller_ref()
+
             if controller is not None:
                 with controller.lock() as lock:
                     yield lock
+
                 return
+
         yield None
 
     def update(self, current: int, total: Optional[int] = None):
@@ -1004,8 +1060,10 @@ class Bar:
         """Get elapsed time in seconds"""
         if self.start_time is None:
             return 0.0
+
         if self.progress < 1.0:
             self._elapsed_time = (datetime.now() - self.start_time).total_seconds()
+
         return self._elapsed_time
 
     def estimated_time(self) -> Optional[float]:
@@ -1032,6 +1090,7 @@ class Bar:
         """Set indentation level"""
         if indent < 0:
             raise ValueError("indent must be non-negative")
+
         self.indent = indent
 
     def is_complete(self) -> bool:
@@ -1078,6 +1137,7 @@ class View:
         # Set theme based on terminal capability if not specified
         if theme is None:
             capability = _detect_terminal_capability()
+
             if capability == TerminalCapability.MINIMAL:
                 self.theme = Theme.minimal()
             else:
@@ -1127,8 +1187,10 @@ class View:
         def include_widget(widget: Widget) -> bool:
             if type(widget) in exclude_widgets:
                 return False
+
             if include_widgets and type(widget) not in include_widgets:
                 return False
+
             return True
 
         title = None
@@ -1196,6 +1258,7 @@ class View:
     def should_update(self, width: int) -> bool:
         """Check if enough time has passed for an update"""
         bar = self.get_bar()
+
         if bar is None:
             return False
 
@@ -1205,6 +1268,7 @@ class View:
     def _validate_last_update_cache(self):
         """Validate and clean up the last update cache"""
         current_time = time.time()
+
         for width, last_width_info in list(self.last_update_for_width.items()):
             if (
                 current_time - last_width_info.get("time", 0)
@@ -1215,6 +1279,7 @@ class View:
 
     def _should_update_internal(self, width: int) -> bool:
         bar = self.get_bar()
+
         if bar is None:
             return False
 
@@ -1245,6 +1310,7 @@ class View:
     def reset(self):
         """Reset widgets to initial state"""
         bar = self.get_bar()
+
         if bar is None:
             return
 
@@ -1255,6 +1321,7 @@ class View:
     def render(self, width: int) -> List[str]:
         """Render the progress bar to a string"""
         bar = self.get_bar()
+
         if bar is None:
             return []
 
@@ -1291,11 +1358,14 @@ class View:
             for idx, widget in widgets_by_priority:
                 if idx in empty_widget_indexes:
                     continue
+
                 rendered = widget.render(bar, available_width)
                 rendered_widgets[idx] = rendered
                 rendered_width = len(rendered[0])
+
                 if rendered_width == 0:
                     last_empty_widget_index = idx
+
                 available_width = max(0, available_width - rendered_width)
 
             if last_empty_widget_index is None:
@@ -1389,6 +1459,7 @@ class _Layout(MutableSequence):
     def render(self, available_width) -> List[str]:
         """Render all progress bars"""
         lines = []
+
         if self.type == _Layout.Type.COLUMN:
             for component in self:
                 rendered_lines = component.render(available_width)
@@ -1420,6 +1491,7 @@ class _Layout(MutableSequence):
                     rendered_components.append(rendered_lines)
 
             max_lines = max(len(r) for r in rendered_components)
+
             for idx, rendered in enumerate(rendered_components):
                 component_available_width = component_widths[idx]
                 added_lines_count = max_lines - len(rendered)
@@ -1624,6 +1696,7 @@ class _ProgressController:
             with cls.lock():
                 if cls._instance is None:
                     cls._instance = super(_ProgressController, cls).__new__(cls)
+
         return cls._instance
 
     def __init__(
@@ -1763,6 +1836,7 @@ class _ProgressController:
         """Set terminal padding from right edge"""
         if value < 0:
             raise ValueError("terminal_padding_right must be non-negative")
+
         with self.lock():
             self._terminal_padding_right = value
             # Force re-render with new padding
@@ -1778,6 +1852,7 @@ class _ProgressController:
         """Set collection watch update interval"""
         if value <= 0:
             raise ValueError("watch_interval must be positive")
+
         with self.lock():
             self._watch_interval = value
 
@@ -1791,6 +1866,7 @@ class _ProgressController:
         """Set minimum update interval"""
         if value < 0:
             raise ValueError("min_update_interval must be non-negative")
+
         with self.lock():
             self._min_update_interval = value
 
@@ -1804,6 +1880,7 @@ class _ProgressController:
         """Set minimum update progress change"""
         if value < 0 or value > 1.0:
             raise ValueError("min_update_progress must be between 0.0 and 1.0")
+
         with self.lock():
             self._min_update_progress = value
 
@@ -1928,8 +2005,10 @@ class _ProgressController:
 
             if bar not in self._view_usage:
                 self._view_usage[bar] = {}
+
             if view not in self._view_usage[bar]:
                 self._view_usage[bar][view] = 0
+
             self._view_usage[bar][view] += 1
 
     def create_bar(self, **kwargs) -> Bar:
@@ -1967,10 +2046,12 @@ class _ProgressController:
 
         for layout in layouts:
             _layout = self._registered_layouts.get(layout)
+
             if _layout is None:
                 continue
 
             views_in_layout = set()
+
             if bar in self._view_usage:
                 for view in self._view_usage[bar]:
                     if view in _layout:
@@ -2054,24 +2135,32 @@ class _ProgressController:
         }
 
         elapsed_time_widget_args = [
-            "label_elapsed",
+            ("text_elapsed", "text"),
             "theme",
             "use_unicode",
         ]
-        elapsed_time_widget_config = {
-            key: kwargs[key] for key in elapsed_time_widget_args if key in kwargs
-        }
+        elapsed_time_widget_config = {}
+        for key in elapsed_time_widget_args:
+            set_key = key
+            if isinstance(key, tuple):
+                key, set_key = key
+
+            elapsed_time_widget_config[set_key] = kwargs.get(key)
 
         estimated_time_widget_args = [
-            "label_estimated",
+            ("text_estimated", "text"),
             "spinner_style",
             "spinner_frames",
             "theme",
             "use_unicode",
         ]
-        estimated_time_widget_config = {
-            key: kwargs[key] for key in estimated_time_widget_args if key in kwargs
-        }
+        estimated_time_widget_config = {}
+        for key in estimated_time_widget_args:
+            set_key = key
+            if isinstance(key, tuple):
+                key, set_key = key
+
+            estimated_time_widget_config[set_key] = kwargs.get(set_key, kwargs.get(key))
 
         view_args = [
             "bar",
@@ -2138,6 +2227,7 @@ class _ProgressController:
                 max = collection.maxsize
             elif isinstance(collection, Sized):
                 max = len(collection)
+
         if bar is None:
             bar = self.create_bar(
                 title=title,
@@ -2200,6 +2290,7 @@ class _ProgressController:
     def _add_layout_internal(self, name: str, parents: List[str]):
         """Internal method to add layout without locking"""
         _layout = self._registered_layouts.get(name)
+
         if _layout is None:
             raise ValueError(
                 f"Layout '{name}' does not exist. It must be created before it can be used."
@@ -2254,6 +2345,7 @@ class _ProgressController:
             raise ValueError("Cannot remove default layout")
 
         _layout = self._registered_layouts.get(name)
+
         if _layout is None:
             raise ValueError(f"Layout '{name}' does not exist.")
 
@@ -2272,6 +2364,7 @@ class _ProgressController:
                 _layout.remove_parent(parent)
 
             self._layout_usage[name] -= 1
+
             if self._layout_usage[name] <= 0:
                 self._clear_layout_internal(_layout)
                 del self._layout_usage[name]
@@ -2289,7 +2382,9 @@ class _ProgressController:
         """Render all progress bars according to layout"""
         if not self._is_in_tty or self._quiet:
             return []
+
         lines = self.layouts[self._DEFAULT_LAYOUT_NAME].render(available_width)
+
         return lines
 
     def hide(self):
@@ -2318,9 +2413,11 @@ class _ProgressController:
 
             # Check if any bar needs updating
             needs_update = force_update
+
             if not needs_update:
                 for bar in list(self._active_bars):
                     views = self._view_usage.get(bar, {})
+
                     needs_update = any(
                         view._should_update_internal(width=_terminal_width)
                         for view in views
@@ -2643,17 +2740,20 @@ def _get_terminal_size(default: Optional[os.terminal_size] = None) -> Tuple[int,
     """Return the width of the terminal in columns, with a safe fallback."""
     if default is None:
         default = os.terminal_size([80, 24])
+
     try:
         # Python 3.3+: built-in, cross-platform
         return os.get_terminal_size(Progress.stream.fileno())
     except OSError:
         # Some environments (cron, IDEs, CI, redirected stdout) have no TTY
         pass
+
     try:
         # shutil is even safer: can take an explicit fallback
         return shutil.get_terminal_size(fallback=default)
     except Exception:
         pass
+
     return default
 
 
@@ -2740,6 +2840,7 @@ class ProgressContext:
         if bar is not None:
             self.bar = bar
             self.bar.total = total
+
             if not Progress.contains_bar(self.bar):
                 Progress.add_bar(self.bar, layouts=layouts, **kwargs)
         else:
@@ -2749,6 +2850,7 @@ class ProgressContext:
 
     def __enter__(self):
         self.bar.start()
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -2805,7 +2907,10 @@ def progress(
     with ProgressContext(total=total, title=title, bar=bar, **kwargs) as ctx:
         for index, item in enumerate(iterable, 1):
             bar_item = BarItem(index, item)
+
             if index == 1:
                 ctx.update(0, item=bar_item)
+
             yield item
+
             ctx.update(index, item=bar_item)

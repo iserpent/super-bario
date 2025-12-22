@@ -654,7 +654,7 @@ class ElapsedTimeWidget(_TimeWidget):
         super().reset(theme=theme, use_unicode=use_unicode)
 
         if text is None:
-            text = "⏱️" if self.use_unicode else ""
+            text = "t" if self.use_unicode else ""
 
         self.text_widget.reset(text=text, theme=theme, use_unicode=use_unicode)
 
@@ -707,7 +707,7 @@ class EstimatedTimeWidget(_TimeWidget):
         super().reset(theme=theme, use_unicode=use_unicode)
 
         if text is None:
-            text = "≈⏱️" if self.use_unicode else "ETA"
+            text = "@" if self.use_unicode else "ETA"
 
         if progress is not None:
             self.progress = progress

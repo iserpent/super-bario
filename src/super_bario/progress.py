@@ -653,9 +653,6 @@ class ElapsedTimeWidget(_TimeWidget):
     ):
         super().reset(theme=theme, use_unicode=use_unicode)
 
-        if text is None:
-            text = "t" if self.use_unicode else ""
-
         self.text_widget.reset(text=text, theme=theme, use_unicode=use_unicode)
 
     def render(self, bar: "Bar", width: int) -> Tuple[str, str]:

@@ -134,7 +134,7 @@ def example_0():
         char_end_incomplete="",
         char_incomplete=" ",
         char_complete="⣿",
-        char_complete_fractions=["⣀", "⣄", "⣆", "⣇", "⣧", "⣷", "⣿"],
+        char_complete_fractions=["⡀", "⡄", "⡆", "⡇", "⣇", "⣧", "⣷", "⣿"],
     )
 
     t = threading.Thread(target=custom_bar_worker, args=(bar,))
